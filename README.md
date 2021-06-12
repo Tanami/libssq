@@ -40,16 +40,16 @@ Here is an example, using each supported query
 
 int main()
 {
-	const char *address = "xxx.xxx.xxx.xxx";
-	const uint16_t port = 27015;
+    const char *address = "xxx.xxx.xxx.xxx";
+    const uint16_t port = 27015;
 
-	/**
-	 * initialization
-	 */
+    /**
+     * initialization
+     */
 
     // set the address of the server
     if (!ssq_set_address(address, port))
-		errx(1, "invalid IPv4 address: %s", address);
+        errx(1, "invalid IPv4 address: %s", address);
 
     // set the send timeout to 5s
     ssq_set_timeout(SSQ_TIMEOUT_SEND, 5, 0);
@@ -113,6 +113,7 @@ int main()
 
     return 0;
 }
+```
 
 ## Dependencies
 
