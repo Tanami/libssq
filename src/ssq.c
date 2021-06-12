@@ -232,9 +232,9 @@ static SSQCode ssq_send_query(const void *const payload, size_t len, char **cons
 	}
 
 #ifdef _WIN32
-				closesocket(sockfd);
+		closesocket(sockfd);
 #else
-				close(sockfd);
+		close(sockfd);
 #endif // _WIN32
 
 	if (code == SSQ_OK)
