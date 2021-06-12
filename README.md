@@ -125,4 +125,3 @@ This library is a personal project I've initiated in order to improve in the C p
 This library is designed to work both under UNIX-like environment and Windows however it was not yet fully tested.
 
 Please be cautious if you plan to use this library, as it may have problems I have not yet noticed/unsupported features.
-```
