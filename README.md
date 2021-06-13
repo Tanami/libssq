@@ -74,7 +74,7 @@ int main()
     printf("Name: %s\n", info.name);
     printf("Players: %hhu/%hhu\n", info.players, info.max_players);
 
-	// ...
+    // ...
 
 
     /**
@@ -94,7 +94,7 @@ int main()
 
     printf("\n");
 
-	// ...
+    // ...
 
     free(players); // WARNING: must be freed
 
@@ -116,7 +116,7 @@ int main()
 
     printf("\n");
 
-	// ...
+    // ...
 
     free(rules); // WARNING: must be freed
 
