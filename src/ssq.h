@@ -143,7 +143,7 @@ void ssq_set_timeout(const SSQTimeout timeout, const long sec, const long usec);
  * Sets the IPv4 address and port of the server to query
  * @param address IPv4 address of the server in decimal-dotted notation
  * @param port    the port number
- * @returns 0 if the address is invalid, 1 otherwise
+ * @returns false if the address is invalid, true otherwise
  */
 bool ssq_set_address(const char *const address, const uint16_t port);
 
