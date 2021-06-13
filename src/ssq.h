@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef uint8_t byte;
 
@@ -144,7 +145,7 @@ void ssq_set_timeout(const SSQTimeout timeout, const long sec, const long usec);
  * @param port    the port number
  * @returns 0 if the address is invalid, 1 otherwise
  */
-int8_t ssq_set_address(const char *const address, const uint16_t port);
+bool ssq_set_address(const char *const address, const uint16_t port);
 
 /**
  * Sends an A2S_INFO query to a server

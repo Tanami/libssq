@@ -76,12 +76,12 @@ static size_t ssq_strncpy(char *const restrict dest, const char *const restrict 
 	return pos + 1;
 }
 
-static inline int8_t ssq_is_truncated(const void *const payload)
+static inline bool ssq_is_truncated(const void *const payload)
 {
 	return *((int32_t *) payload) == -1;
 }
 
-static int8_t ssq_parse_packet(const void *const buffer, SSQPacket *packet)
+static bool ssq_parse_packet(const void *const buffer, SSQPacket *packet)
 {
 	size_t pos = 0;
 
@@ -241,9 +241,9 @@ static SSQCode ssq_send_query(const void *const payload, size_t len, char **cons
 	}
 
 #ifdef _WIN32
-		closesocket(sockfd);
+	closesocket(sockfd);
 #else
-		close(sockfd);
+	close(sockfd);
 #endif // _WIN32
 
 	if (code == SSQ_OK)
@@ -262,7 +262,7 @@ static SSQCode ssq_send_query(const void *const payload, size_t len, char **cons
 	return code;
 }
 
-int8_t ssq_set_address(const char *const address, const uint16_t port)
+bool ssq_set_address(const char *const address, const uint16_t port)
 {
 #ifdef _WIN32
 	const unsigned long addr = inet_addr(address);
@@ -271,7 +271,7 @@ int8_t ssq_set_address(const char *const address, const uint16_t port)
 #endif // _WIN32
 
 	if (addr == INADDR_NONE)
-		return 0;
+		return false;
 
 	memset(&g_addr, 0, sizeof(g_addr));
 
@@ -279,7 +279,7 @@ int8_t ssq_set_address(const char *const address, const uint16_t port)
 	g_addr.sin_family      = AF_INET;
 	g_addr.sin_port        = htons(port);
 
-	return 1;
+	return true;
 }
 
 void ssq_set_timeout(const SSQTimeout timeout, const long sec, const long usec)
