@@ -6,31 +6,32 @@ libssq is a C library for querying Source servers.
 
 ## How to use it
 
-There are 3 possibles queries up to this day :
+Up to this day, 3 different queries are supported :
 - `A2S_INFO`: retrieves information about the server
 - `A2S_PLAYER`: retrieves information about the players
 - `A2S_RULES`: retrieves the server's rules
 
 For more details, please refer to Valve's [server queries documentation](https://developer.valvesoftware.com/wiki/Server_queries).
 
-Before we can issue any query, we must set a timeout for sending and receiving data. To do so we must use the `ssq_set_timeout` function.
+## Issuing a query
+
+Before we can issue any query, we must set a timeout for sending and receiving data as well as setting the
+address of the server we would like to query.
 
 ```c
+// setting a timeout
+
 ssq_set_timeout(SSQ_TIMEOUT_SEND, 5, 0); // sets a 5s timeout for sending
 ssq_set_timeout(SSQ_TIMEOUT_RECV, 5, 0); // sets a 5s timeout for receiving
-```
 
-We must also specify the address and port number of the server we would like to query.
-To do so, we must use the `ssq_set_address` function.
-
-```c
+// setting the server's address
 ssq_set_address("xxx.xxx.xxx.xxx", 12345);
 ```
 
 Once we set the timeout for both `SSQ_TIMEOUT_SEND` and `SSQ_TIMEOUT_RECV` as well as the address of the server
-we would like to query, we can use the functions to issue any query accordingly.
+we would like to query, we can use the corresponding functions to issue any given query.
 
-Here is an example, using each supported query
+Here is an example using each supported query listed above
 
 ```c
 #include <ssq.h>
@@ -125,14 +126,17 @@ int main()
 
 ## Dependencies
 
-None.
+There are no dependencies for this project.
 
 ## Building
 
-In order to build this library, clone this repository, and create `build` folder.
-From this folder, call `cmake ..` to generate the buildsystem, then `cmake --build .` in order to build the library.
-The library will be static by default.
+In order to build this library : clone this repository, and create a `build` folder.
 
+From this folder, run `cmake ..` to generate the buildsystem.
+
+Once the buildsystem is ready, run `cmake --build .` in order to build the library.
+
+The resulting library will be static by default.
 
 ## Notice
 
