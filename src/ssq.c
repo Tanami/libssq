@@ -85,21 +85,21 @@ static int8_t ssq_parse_packet(const void *const buffer, SSQPacket *packet)
 {
 	size_t pos = 0;
 
-	packet->header = *((int32_t *) (buffer + pos));
+	packet->header = CAST(int32_t, buffer + pos);
 	pos += sizeof(packet->header);
 
 	if (packet->header == -2) // multi-packet response
 	{
-		packet->id = *((int32_t *) (buffer + pos));
+		packet->id = CAST(int32_t, buffer + pos);
 		pos += sizeof(packet->id);
 
-		packet->total = *((byte *) (buffer + pos));
+		packet->total = CAST(byte, buffer + pos);
 		pos += sizeof(packet->total);
 
-		packet->number = *((byte *) (buffer + pos));
+		packet->number = CAST(byte, buffer + pos);
 		pos += sizeof(packet->number);
 
-		packet->size = *((uint16_t *) (buffer + pos));
+		packet->size = CAST(uint16_t, buffer + pos);
 		pos += sizeof(packet->size);
 	}
 	else if (packet->header != -1) // not a single packet response
@@ -157,22 +157,31 @@ static SSQCode ssq_send_query(const void *const payload, size_t len, char **cons
 
 	const int ndfs = sockfd + 1;
 
-	// check for write state on the socket file descriptor
-	if (select(ndfs, NULL, &fds, NULL, &g_timeout_send) <= 0)
-		return SSQ_SOCK_SND_TIMEOUT;
-
-	if (sendto(sockfd, payload, len, 0, (struct sockaddr *) &g_addr, sizeof(g_addr)) == -1)
-		return SSQ_SOCK_SND_ERR;
-
-	// check for read state on the socket file descriptor
-	if (select(ndfs, NULL, &fds, NULL, &g_timeout_recv) <= 0)
-		return SSQ_SOCK_RCV_TIMEOUT;
-
 	// buffer to read the data from the socket
 	char buffer[SSQ_PACKET_SIZE] = {};
 
-	if (recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL) == -1)
-		return SSQ_SOCK_RCV_ERR;
+	// check for write state on the socket file descriptor
+	if (select(ndfs, NULL, &fds, NULL, &g_timeout_send) <= 0)
+		code = SSQ_SOCK_SND_TIMEOUT;
+	else if (sendto(sockfd, payload, len, 0, (struct sockaddr *) &g_addr, sizeof(g_addr)) == -1)
+		code = SSQ_SOCK_SND_ERR;
+	// check for read state on the socket file descriptor
+	else if (select(ndfs, NULL, &fds, NULL, &g_timeout_recv) <= 0)
+		code = SSQ_SOCK_RCV_TIMEOUT;
+	else if (recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL) == -1)
+		code = SSQ_SOCK_RCV_ERR;
+
+
+	if (code != SSQ_OK)
+	{
+#ifdef _WIN32
+		closesocket(sockfd);
+#else
+		close(sockfd);
+#endif // _WIN32
+
+		return code;
+	}
 
 	SSQPacket packet;          // temporary packet
 	SSQPacket *packets = NULL; // array of received packets (in the right order)
