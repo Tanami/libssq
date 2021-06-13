@@ -60,6 +60,7 @@ int main()
 
     SSQCode code; // result code of our function calls
 
+
     /**
      * sending an A2S_INFO query
      */
@@ -71,6 +72,8 @@ int main()
 
     printf("Name: %s\n", info.name);
     printf("Players: %hhu/%hhu\n", info.players, info.max_players);
+
+	// ...
 
 
     /**
@@ -90,7 +93,10 @@ int main()
 
     printf("\n");
 
+	// ...
+
     free(players); // WARNING: must be freed
+
 
     /**
      * sending an A2S_RULES query
@@ -109,6 +115,8 @@ int main()
 
     printf("\n");
 
+	// ...
+
     free(rules); // WARNING: must be freed
 
     return 0;
@@ -119,9 +127,17 @@ int main()
 
 None.
 
+## Building
+
+In order to build this library, clone this repository, and create `build` folder.
+From this folder, call `cmake ..` to generate the buildsystem, then `cmake --build .` in order to build the library.
+The library will be static by default.
+
+
 ## Notice
 
 This library is a personal project I've initiated in order to improve in the C programming language.
-This library is designed to work both under UNIX-like environment and Windows however it was not yet fully tested.
+
+It is designed to work both under UNIX-like environment and Windows, however it was not fully tested yet.
 
 Please be cautious if you plan to use this library, as it may have problems I have not yet noticed/unsupported features.
