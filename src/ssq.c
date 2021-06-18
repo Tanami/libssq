@@ -59,7 +59,7 @@ typedef struct
 	int8_t *payload;
 } SSQPacket;
 
-static size_t ssq_strncpy(char *const restrict dest, const char *const restrict src, const size_t len)
+static size_t ssq_strncpy(char *const dest, const char *const src, const size_t len)
 {
 	size_t pos = 0;
 
@@ -81,7 +81,7 @@ static inline bool ssq_is_truncated(const void *const payload)
 	return *((int32_t *) payload) == -1;
 }
 
-static bool ssq_parse_packet(const void *const buffer, SSQPacket *packet)
+static bool ssq_parse_packet(const char *const buffer, SSQPacket *packet)
 {
 	size_t pos = 0;
 
@@ -158,7 +158,7 @@ static SSQCode ssq_send_query(const void *const payload, size_t len, char **cons
 	const int ndfs = sockfd + 1;
 
 	// buffer to read the data from the socket
-	char buffer[SSQ_PACKET_SIZE] = {};
+	char buffer[SSQ_PACKET_SIZE];
 
 	// check for write state on the socket file descriptor
 	if (select(ndfs, NULL, &fds, NULL, &g_timeout_send) <= 0)
@@ -207,9 +207,6 @@ static SSQCode ssq_send_query(const void *const payload, size_t len, char **cons
 				code = SSQ_SOCK_RCV_TIMEOUT;
 				break;
 			}
-
-			// reset the buffer
-			memset(buffer, 0, SSQ_PACKET_SIZE);
 
 			if (recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL) == -1)
 			{
