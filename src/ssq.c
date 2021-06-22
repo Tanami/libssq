@@ -14,11 +14,7 @@
 
 #define CAST(x, y) *((x *) (y))
 
-#ifdef _WIN32
-
-#include <WinSock2.h>
-
-#else
+#ifndef _WIN32
 
 #include <arpa/inet.h>
 #include <sys/select.h>
