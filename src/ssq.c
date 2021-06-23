@@ -26,15 +26,6 @@ typedef int SOCKET;
 
 #endif // _WIN32
 
-/** internal socket send timeout */
-static struct timeval g_timeout_send;
-
-/** internal socket recv timeout */
-static struct timeval g_timeout_recv;
-
-/** internal socket address currently set */
-static struct sockaddr_in g_addr;
-
 typedef struct
 {
 	/** -2 means the packet is split, -1 means the packet is not split */
@@ -138,7 +129,7 @@ static void ssq_combine_packets(const SSQPacket *const packets, const uint16_t c
 	}
 }
 
-static SSQCode ssq_send_query(const void *const payload, size_t len, char **const resp)
+static SSQCode ssq_send_query(SSQHandle *const handle, const void *const payload, size_t len, char **const resp)
 {
 	SSQCode code = SSQ_OK;
 
@@ -157,16 +148,15 @@ static SSQCode ssq_send_query(const void *const payload, size_t len, char **cons
 	char buffer[SSQ_PACKET_SIZE];
 
 	// check for write state on the socket file descriptor
-	if (select(ndfs, NULL, &fds, NULL, &g_timeout_send) <= 0)
+	if (select(ndfs, NULL, &fds, NULL, &handle->timeout_send) <= 0)
 		code = SSQ_SOCK_SND_TIMEOUT;
-	else if (sendto(sockfd, payload, len, 0, (struct sockaddr *) &g_addr, sizeof(g_addr)) == -1)
+	else if (sendto(sockfd, payload, len, 0, (struct sockaddr *) &handle->addr, sizeof(handle->addr)) == -1)
 		code = SSQ_SOCK_SND_ERR;
 	// check for read state on the socket file descriptor
-	else if (select(ndfs, NULL, &fds, NULL, &g_timeout_recv) <= 0)
+	else if (select(ndfs, NULL, &fds, NULL, &handle->timeout_recv) <= 0)
 		code = SSQ_SOCK_RCV_TIMEOUT;
 	else if (recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL) == -1)
 		code = SSQ_SOCK_RCV_ERR;
-
 
 	if (code != SSQ_OK)
 	{
@@ -198,7 +188,7 @@ static SSQCode ssq_send_query(const void *const payload, size_t len, char **cons
 		for (byte i = 1; i < count; ++i)
 		{
 			// check for read state on the socket file descriptor
-			if (select(ndfs, NULL, &fds, NULL, &g_timeout_recv) <= 0)
+			if (select(ndfs, NULL, &fds, NULL, &handle->timeout_recv) <= 0)
 			{
 				code = SSQ_SOCK_RCV_TIMEOUT;
 				break;
@@ -255,7 +245,7 @@ static SSQCode ssq_send_query(const void *const payload, size_t len, char **cons
 	return code;
 }
 
-bool ssq_set_address(const char *const address, const uint16_t port)
+bool ssq_set_address(SSQHandle *const handle, const char *const address, const uint16_t port)
 {
 #ifdef _WIN32
 	const unsigned long addr = inet_addr(address);
@@ -266,30 +256,30 @@ bool ssq_set_address(const char *const address, const uint16_t port)
 	if (addr == INADDR_NONE)
 		return false;
 
-	memset(&g_addr, 0, sizeof(g_addr));
+	memset(&handle->addr, 0, sizeof(handle->addr));
 
-	g_addr.sin_addr.s_addr = addr;
-	g_addr.sin_family      = AF_INET;
-	g_addr.sin_port        = htons(port);
+	handle->addr.sin_addr.s_addr = addr;
+	handle->addr.sin_family      = AF_INET;
+	handle->addr.sin_port        = htons(port);
 
 	return true;
 }
 
-void ssq_set_timeout(const SSQTimeout timeout, const long sec, const long usec)
+void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const long millis)
 {
-	struct timeval *const tv = (timeout == SSQ_TIMEOUT_SEND) ? &g_timeout_send : &g_timeout_recv;
-	tv->tv_sec = sec;
-	tv->tv_usec = usec;
+	struct timeval *const tv = (timeout == SSQ_TIMEOUT_SEND) ? &handle->timeout_send : &handle->timeout_recv;
+	tv->tv_sec = millis / 1000;
+	tv->tv_usec = millis % 1000 * 1000;
 }
 
-SSQCode ssq_info(A2SInfo *const info)
+SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 {
 	SSQCode code = SSQ_OK;
 
 	byte req[29] = A2S_INFO;
 	char *resp;
 
-	if ((code = ssq_send_query(req, 25, &resp)) != SSQ_OK)
+	if ((code = ssq_send_query(handle, req, 25, &resp)) != SSQ_OK)
 		return code;
 
 	if (resp[0] == S2A_CHALLENGE)
@@ -300,7 +290,7 @@ SSQCode ssq_info(A2SInfo *const info)
 		free(resp);
 
 		// send the query with the challenge
-		if ((code = ssq_send_query(req, 9, &resp)) != SSQ_OK)
+		if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
 			return code;
 	}
 
@@ -421,14 +411,14 @@ SSQCode ssq_info(A2SInfo *const info)
 	return code;
 }
 
-SSQCode ssq_player(A2SPlayer **const players, byte *const count)
+SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *const count)
 {
 	SSQCode code = SSQ_OK;
 
 	byte req[9] = A2S_PLAYER;
 	char *resp;
 
-	if ((code = ssq_send_query(req, 9, &resp)) != SSQ_OK)
+	if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
 		return code;
 
 	if (resp[0] != S2A_CHALLENGE)
@@ -443,7 +433,7 @@ SSQCode ssq_player(A2SPlayer **const players, byte *const count)
 	free(resp);
 
 	// send the query with the challenge
-	if ((code = ssq_send_query(req, 9, &resp)) != SSQ_OK)
+	if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
 		return code;
 
 	size_t pos = 0;
@@ -481,14 +471,14 @@ SSQCode ssq_player(A2SPlayer **const players, byte *const count)
 	return code;
 }
 
-SSQCode ssq_rules(A2SRules **const rules, uint16_t *const count)
+SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *const count)
 {
 	SSQCode code = SSQ_OK;
 
 	byte req[9] = A2S_RULES;
 	char *resp;
 
-	if ((code = ssq_send_query(req, 9, &resp)) != SSQ_OK)
+	if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
 		return code;
 
 	if (resp[0] == S2A_CHALLENGE)
@@ -499,7 +489,7 @@ SSQCode ssq_rules(A2SRules **const rules, uint16_t *const count)
 		free(resp);
 
 		// send the query with the challenge
-		if ((code = ssq_send_query(req, 9, &resp)) != SSQ_OK)
+		if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
 			return code;
 	}
 

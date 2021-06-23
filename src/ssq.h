@@ -131,43 +131,58 @@ typedef struct
 	char value[256];
 } A2SRules;
 
-/**
- * Sets the recv/send timeout of a SourceServer's internal socket
- * @param server pointer to the SourceServer
- * @param sec	 number of seconds for the timeout
- * @param usec	 number of microseconds for the timeout
- */
-void ssq_set_timeout(const SSQTimeout timeout, const long sec, const long usec);
+typedef struct
+{
+	/** internal socket recv timeout */
+	struct timeval timeout_recv;
+
+	/** internal socket send timeout */
+	struct timeval timeout_send;
+
+	/** internal socket address currently set */
+	struct sockaddr_in addr;
+} SSQHandle;
 
 /**
- * Sets the IPv4 address and port of the server to query
+ * Sets the recv/send timeout of an SSQ handle
+ * @param handle pointer to the SSQ handle
+ * @param millis number of milliseconds for the timeout
+ */
+void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const long millis);
+
+/**
+ * Sets the server address of an SSQ handle
+ * @param handle  pointer to the SSQ handle
  * @param address IPv4 address of the server in decimal-dotted notation
  * @param port    the port number
  * @returns false if the address is invalid, true otherwise
  */
-bool ssq_set_address(const char *const address, const uint16_t port);
+bool ssq_set_address(SSQHandle *const handle, const char *const address, const uint16_t port);
 
 /**
  * Sends an A2S_INFO query to a server
- * @param info pointer to the A2S_INFO struct where to store the server's information
+ * @param handle pointer to the SSQ handle
+ * @param info   pointer to the A2S_INFO struct where to store the server's information
  * @returns SSQ_OK if the query was successful
  */
-SSQCode ssq_info(A2SInfo *const info);
+SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info);
 
 /**
  * Sends an A2S_PLAYER query to a server
+ * @param handle  pointer to the SSQ handle
  * @param players pointer where to store the dynamically-allocated A2SPlayer array
  * @param count   pointer to store the number of players in `players`
  * @returns SSQ_OK if the query was successful
  */
-SSQCode ssq_player(A2SPlayer **const players, byte *const count);
+SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *const count);
 
 /**
  * Sends an A2S_RULES query to a server
- * @param rules pointer where to store the dynamically-allocated A2SRules array
- * @param count pointer to store the number of rules in `rules`
+ * @param handle pointer to the SSQ handle
+ * @param rules  pointer where to store the dynamically-allocated A2SRules array
+ * @param count  pointer to store the number of rules in `rules`
  * @returns SSQ_OK if the query was successful
  */
-SSQCode ssq_rules(A2SRules **const rules, uint16_t *const count);
+SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *const count);
 
 #endif // SSQ_H
