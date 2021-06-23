@@ -94,6 +94,9 @@ typedef struct
 	/** version of the game installed on the server */
 	char version[32];
 
+	/** extra data flag */
+	byte edf;
+
 	/** the server's game port number */
 	uint16_t port;
 

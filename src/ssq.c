@@ -105,7 +105,7 @@ static void ssq_combine_packets(const SSQPacket *const packets, const uint16_t c
 	if (count == 1) // single-packet response
 	{
 		const size_t size = SSQ_PACKET_SIZE - sizeof(packets->header);
-		*resp = malloc(size);
+		*resp = calloc(size, sizeof(char));
 		memcpy(*resp, packets->payload, size);
 	}
 	else // multi-packet response
@@ -117,7 +117,7 @@ static void ssq_combine_packets(const SSQPacket *const packets, const uint16_t c
 			size += packets[i].size;
 		}
 
-		*resp = malloc(size);
+		*resp = calloc(size, sizeof(char));
 
 		size_t pos = 0;
 
@@ -371,22 +371,22 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 
 		pos += ssq_strncpy(info->version, resp + pos, 32);
 
-		// extra data flag
-		byte edf = CAST(byte, resp + pos);
+		info->edf = CAST(byte, resp + pos);
+		pos += sizeof(info->edf);
 
-		if (edf & 0x80)
+		if (info->edf & 0x80)
 		{
 			info->port = CAST(uint16_t, resp + pos);
 			pos += sizeof(info->port);
 		}
 
-		if (edf & 0x10)
+		if (info->edf & 0x10)
 		{
 			info->steamid = CAST(uint64_t, resp + pos);
 			pos += sizeof(info->steamid);
 		}
 
-		if (edf & 0x40)
+		if (info->edf & 0x40)
 		{
 			info->spectator_port = CAST(uint16_t, resp + pos);
 			pos += sizeof(info->spectator_port);
@@ -394,12 +394,12 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 			pos += ssq_strncpy(info->spectator_name, resp + pos, 256);
 		}
 
-		if (edf & 0x20)
+		if (info->edf & 0x20)
 		{
 			pos += ssq_strncpy(info->keywords, resp + pos, 256);
 		}
 
-		if (edf & 0x01)
+		if (info->edf & 0x01)
 		{
 			info->gameid = CAST(uint64_t, resp + pos);
 			pos += sizeof(info->gameid);
