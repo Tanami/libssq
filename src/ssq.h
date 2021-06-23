@@ -164,7 +164,7 @@ bool ssq_set_address(SSQHandle *const handle, const char *const address, const u
 
 /**
  * Sends an A2S_INFO query to a server
- * @param handle pointer to the SSQ handle
+ * @param handle pointer to the SSQ handle to use
  * @param info   pointer to the A2S_INFO struct where to store the server's information
  * @returns SSQ_OK if the query was successful
  */
@@ -172,7 +172,7 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info);
 
 /**
  * Sends an A2S_PLAYER query to a server
- * @param handle  pointer to the SSQ handle
+ * @param handle  pointer to the SSQ handle to use
  * @param players pointer where to store the dynamically-allocated A2SPlayer array
  * @param count   pointer to store the number of players in `players`
  * @returns SSQ_OK if the query was successful
@@ -181,7 +181,7 @@ SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *con
 
 /**
  * Sends an A2S_RULES query to a server
- * @param handle pointer to the SSQ handle
+ * @param handle pointer to the SSQ handle to use
  * @param rules  pointer where to store the dynamically-allocated A2SRules array
  * @param count  pointer to store the number of rules in `rules`
  * @returns SSQ_OK if the query was successful
