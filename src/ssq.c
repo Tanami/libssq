@@ -519,3 +519,14 @@ SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *con
 
 	return code;
 }
+
+A2SRules *ssq_get_rule(const char *const name, A2SRules *const rules, const byte count)
+{
+	for (byte i = 0; i < count; ++i)
+	{
+		if (strcmp(rules[i].name, name) == 0)
+			return &rules[i];
+	}
+
+	return NULL;
+}

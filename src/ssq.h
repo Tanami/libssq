@@ -188,4 +188,13 @@ SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *con
  */
 SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *const count);
 
+/**
+ * Searches for the rule with the provided name among an array of A2SRules
+ * @param name  name of the rule to search for
+ * @param rules array of A2SRules
+ * @param count number of rules in the array
+ * @returns NULL if no rule with the provided name was found, a pointer to the rule otherwise
+ */
+A2SRules *ssq_get_rule(const char *const name, A2SRules *const rules, const byte count);
+
 #endif // SSQ_H
