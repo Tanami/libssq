@@ -148,8 +148,9 @@ typedef struct
 
 /**
  * Sets the recv/send timeout of an SSQ handle
- * @param handle pointer to the SSQ handle
- * @param millis number of milliseconds for the timeout
+ * @param handle  pointer to the SSQ handle
+ * @param timeout the timeout to set (send or recv)
+ * @param millis  number of milliseconds for the timeout
  */
 void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const long millis);
 
