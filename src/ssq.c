@@ -282,7 +282,7 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 	if ((code = ssq_send_query(handle, req, 25, &resp)) != SSQ_OK)
 		return code;
 
-	if (resp[0] == S2A_CHALLENGE)
+	while (resp[0] == S2A_CHALLENGE)
 	{
 		// copy the challenge number
 		memcpy(req + 25, resp + 1, 4);
@@ -421,20 +421,17 @@ SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *con
 	if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
 		return code;
 
-	if (resp[0] != S2A_CHALLENGE)
+	while (resp[0] == S2A_CHALLENGE)
 	{
+		// copy the challenge number
+		memcpy(req + 5, resp + 1, 4);
+
 		free(resp);
-		return SSQ_INVALID_RESP;
+
+		// send the query with the challenge
+		if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
+			return code;
 	}
-
-	// copy the challenge number
-	memcpy(req + 5, resp + 1, 4);
-
-	free(resp);
-
-	// send the query with the challenge
-	if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
-		return code;
 
 	size_t pos = 0;
 
@@ -481,7 +478,7 @@ SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *con
 	if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
 		return code;
 
-	if (resp[0] == S2A_CHALLENGE)
+	while (resp[0] == S2A_CHALLENGE)
 	{
 		// copy the challenge number
 		memcpy(req + 5, resp + 1, 4);
