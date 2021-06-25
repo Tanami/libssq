@@ -265,7 +265,7 @@ bool ssq_set_address(SSQHandle *const handle, const char *const address, const u
 	return true;
 }
 
-void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const long millis)
+void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const time_t millis)
 {
 	struct timeval *const tv = (timeout == SSQ_TIMEOUT_SEND) ? &handle->timeout_send : &handle->timeout_recv;
 	tv->tv_sec = millis / 1000;

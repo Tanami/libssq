@@ -151,7 +151,7 @@ typedef struct
  * @param timeout the timeout to set (send or recv)
  * @param millis  number of milliseconds for the timeout
  */
-void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const long millis);
+void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const time_t millis);
 
 /**
  * Sets the server address of an SSQ handle
