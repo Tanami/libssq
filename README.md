@@ -62,7 +62,7 @@ int main()
     ssq_set_timeout(&handle, SSQ_TIMEOUT_SEND, 5000);
 
     // set the recv timeout to 5s
-    ssq_set_timeout(&handle, SSQ_TIMEOUT_SEND, 5000);
+    ssq_set_timeout(&handle, SSQ_TIMEOUT_RECV, 5000);
 
 
     SSQCode code; // result code of our function calls
