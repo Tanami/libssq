@@ -5,8 +5,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef uint8_t byte;
-
 #ifdef _WIN32
 
 #include <WinSock2.h>
@@ -18,9 +16,14 @@ typedef uint8_t byte;
 
 #endif // _WIN32
 
+#define SSQ_HOSTNAME_LEN 128
+
+typedef uint8_t byte;
+
 typedef enum
 {
 	SSQ_OK               = 0,
+	SSQ_INVALID_ADDR     = 1,
 	SSQ_SOCK_CREATE_FAIL = 2,
 	SSQ_SOCK_SND_ERR     = 3,
 	SSQ_SOCK_SND_TIMEOUT = 4,
@@ -141,8 +144,11 @@ typedef struct
 	/** internal socket send timeout */
 	struct timeval timeout_send;
 
-	/** internal socket address currently set */
-	struct sockaddr_in addr;
+	/** hostname currently set */
+	char hostname[SSQ_HOSTNAME_LEN];
+
+	/** port number currently set */
+	char port[8];
 } SSQHandle;
 
 /**
@@ -151,16 +157,15 @@ typedef struct
  * @param timeout the timeout to set (send or recv)
  * @param millis  number of milliseconds for the timeout
  */
-void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const time_t millis);
+void ssq_set_timeout(SSQHandle *handle, const SSQTimeout timeout, const time_t millis);
 
 /**
  * Sets the server address of an SSQ handle
- * @param handle  pointer to the SSQ handle
- * @param address IPv4 address of the server in decimal-dotted notation
- * @param port    the port number
- * @returns false if the address is invalid, true otherwise
+ * @param handle   pointer to the SSQ handle
+ * @param hostname address of the server to query
+ * @param port     port number of the server to query
  */
-bool ssq_set_address(SSQHandle *const handle, const char *const address, const uint16_t port);
+void ssq_set_address(SSQHandle *handle, const char *address, const uint16_t port);
 
 /**
  * Sends an A2S_INFO query to a server
@@ -168,7 +173,7 @@ bool ssq_set_address(SSQHandle *const handle, const char *const address, const u
  * @param info   pointer to the A2S_INFO struct where to store the server's information
  * @returns SSQ_OK if the query was successful
  */
-SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info);
+SSQCode ssq_info(SSQHandle *handle, A2SInfo *info);
 
 /**
  * Sends an A2S_PLAYER query to a server
@@ -177,7 +182,7 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info);
  * @param count   pointer to store the number of players in `players`
  * @returns SSQ_OK if the query was successful
  */
-SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *const count);
+SSQCode ssq_player(SSQHandle *handle, A2SPlayer **players, byte *count);
 
 /**
  * Sends an A2S_RULES query to a server
@@ -186,7 +191,7 @@ SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *con
  * @param count  pointer to store the number of rules in `rules`
  * @returns SSQ_OK if the query was successful
  */
-SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *const count);
+SSQCode ssq_rules(SSQHandle *handle, A2SRules **rules, uint16_t *count);
 
 /**
  * Searches for the rule with the provided name among an array of A2SRules
@@ -195,6 +200,6 @@ SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *con
  * @param count number of rules in the array
  * @returns NULL if no rule with the provided name was found, a pointer to the rule otherwise
  */
-A2SRules *ssq_get_rule(const char *const name, A2SRules *const rules, const byte count);
+A2SRules *ssq_get_rule(const char *name, A2SRules *rules, const byte count);
 
 #endif // SSQ_H

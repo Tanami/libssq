@@ -1,5 +1,6 @@
 #include "ssq.h"
 #include <string.h>
+#include <stdio.h>
 
 #define SSQ_PACKET_SIZE 1400
 
@@ -17,7 +18,9 @@
 #ifndef _WIN32
 
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <sys/select.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #define INVALID_SOCKET -1
@@ -65,7 +68,7 @@ static size_t ssq_strncpy(char *const dest, const char *const src, const size_t 
 
 static inline bool ssq_is_truncated(const void *const payload)
 {
-	return *((int32_t *) payload) == -1;
+	return CAST(int32_t, payload) == -1;
 }
 
 static bool ssq_parse_packet(const char *const buffer, SSQPacket *packet)
@@ -73,21 +76,21 @@ static bool ssq_parse_packet(const char *const buffer, SSQPacket *packet)
 	size_t pos = 0;
 
 	packet->header = CAST(int32_t, buffer + pos);
-	pos += sizeof(packet->header);
+	pos += sizeof (packet->header);
 
 	if (packet->header == -2) // multi-packet response
 	{
 		packet->id = CAST(int32_t, buffer + pos);
-		pos += sizeof(packet->id);
+		pos += sizeof (packet->id);
 
 		packet->total = CAST(byte, buffer + pos);
-		pos += sizeof(packet->total);
+		pos += sizeof (packet->total);
 
 		packet->number = CAST(byte, buffer + pos);
-		pos += sizeof(packet->number);
+		pos += sizeof (packet->number);
 
 		packet->size = CAST(uint16_t, buffer + pos);
-		pos += sizeof(packet->size);
+		pos += sizeof (packet->size);
 	}
 	else if (packet->header != -1) // not a single packet response
 	{
@@ -104,8 +107,8 @@ static void ssq_combine_packets(const SSQPacket *const packets, const uint16_t c
 {
 	if (count == 1) // single-packet response
 	{
-		const size_t size = SSQ_PACKET_SIZE - sizeof(packets->header);
-		*resp = calloc(size, sizeof(char));
+		const size_t size = SSQ_PACKET_SIZE - sizeof (packets->header);
+		*resp = calloc(size, sizeof (char));
 		memcpy(*resp, packets->payload, size);
 	}
 	else // multi-packet response
@@ -117,7 +120,7 @@ static void ssq_combine_packets(const SSQPacket *const packets, const uint16_t c
 			size += packets[i].size;
 		}
 
-		*resp = calloc(size, sizeof(char));
+		*resp = calloc(size, sizeof (char));
 
 		size_t pos = 0;
 
@@ -133,7 +136,40 @@ static SSQCode ssq_send_query(SSQHandle *const handle, const void *const payload
 {
 	SSQCode code = SSQ_OK;
 
-	const SOCKET sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	// hints for getaddrinfo
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof (hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_DGRAM;
+
+	// address list obtained by getaddrinfo
+	struct addrinfo *addr_list;
+
+	struct addrinfo addr;
+
+	SOCKET sockfd = INVALID_SOCKET;
+
+	if (getaddrinfo(handle->hostname, handle->port, &hints, &addr_list) == 0)
+	{
+		for (struct addrinfo *cur = addr_list; cur != NULL; cur = cur->ai_next)
+		{
+			sockfd = socket(cur->ai_family, cur->ai_socktype, cur->ai_protocol);
+
+			if (sockfd != INVALID_SOCKET)
+			{
+				// copy the address
+				memcpy(&addr, cur, sizeof (struct addrinfo));
+				break;
+			}
+		}
+	}
+	else
+	{
+		return SSQ_INVALID_ADDR;
+	}
+
+	// free the address list
+	freeaddrinfo(addr_list);
 
 	if (sockfd == INVALID_SOCKET)
 		return SSQ_SOCK_CREATE_FAIL;
@@ -150,7 +186,7 @@ static SSQCode ssq_send_query(SSQHandle *const handle, const void *const payload
 	// check for write state on the socket file descriptor
 	if (select(ndfs, NULL, &fds, NULL, &handle->timeout_send) <= 0)
 		code = SSQ_SOCK_SND_TIMEOUT;
-	else if (sendto(sockfd, payload, len, 0, (struct sockaddr *) &handle->addr, sizeof(handle->addr)) == -1)
+	else if (sendto(sockfd, payload, len, 0, addr.ai_addr, addr.ai_addrlen) == -1)
 		code = SSQ_SOCK_SND_ERR;
 	// check for read state on the socket file descriptor
 	else if (select(ndfs, NULL, &fds, NULL, &handle->timeout_recv) <= 0)
@@ -178,12 +214,12 @@ static SSQCode ssq_send_query(SSQHandle *const handle, const void *const payload
 	const byte count = (packet.header == -2) ? packet.total : 1; // number of packets
 
 	// allocate memory to store the packets
-	packets = calloc(count, sizeof(SSQPacket));
+	packets = calloc(count, sizeof (SSQPacket));
 
 	if (packet.header == -2) // multi-packet response
 	{
 		// copy the first packet received
-		memcpy(packets, &packet, sizeof(SSQPacket));
+		memcpy(packets, &packet, sizeof (SSQPacket));
 
 		for (byte i = 1; i < count; ++i)
 		{
@@ -214,13 +250,13 @@ static SSQCode ssq_send_query(SSQHandle *const handle, const void *const payload
 			}
 
 			// copy the packet
-			memcpy(packets + packet.number, &packet, sizeof(SSQPacket));
+			memcpy(packets + packet.number, &packet, sizeof (SSQPacket));
 		}
 	}
 	else // single-packet response
 	{
 		// copy the packet
-		memcpy(packets, &packet, sizeof(SSQPacket));
+		memcpy(packets, &packet, sizeof (SSQPacket));
 	}
 
 #ifdef _WIN32
@@ -245,34 +281,20 @@ static SSQCode ssq_send_query(SSQHandle *const handle, const void *const payload
 	return code;
 }
 
-bool ssq_set_address(SSQHandle *const handle, const char *const address, const uint16_t port)
+void ssq_set_address(SSQHandle *handle, const char *hostname, const uint16_t port)
 {
-#ifdef _WIN32
-	const unsigned long addr = inet_addr(address);
-#else
-	const in_addr_t addr = inet_addr(address);
-#endif // _WIN32
-
-	if (addr == INADDR_NONE)
-		return false;
-
-	memset(&handle->addr, 0, sizeof(handle->addr));
-
-	handle->addr.sin_addr.s_addr = addr;
-	handle->addr.sin_family      = AF_INET;
-	handle->addr.sin_port        = htons(port);
-
-	return true;
+	strncpy(handle->hostname, hostname, SSQ_HOSTNAME_LEN);
+	sprintf(handle->port, "%hu", port);
 }
 
-void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const time_t millis)
+void ssq_set_timeout(SSQHandle *handle, const SSQTimeout timeout, const time_t millis)
 {
 	struct timeval *const tv = (timeout == SSQ_TIMEOUT_SEND) ? &handle->timeout_send : &handle->timeout_recv;
 	tv->tv_sec = millis / 1000;
 	tv->tv_usec = millis % 1000 * 1000;
 }
 
-SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
+SSQCode ssq_info(SSQHandle *handle, A2SInfo *info)
 {
 	SSQCode code = SSQ_OK;
 
@@ -305,7 +327,7 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 	if (code == SSQ_OK)
 	{
 		info->protocol = CAST(byte, resp + pos);
-		pos += sizeof(info->protocol);
+		pos += sizeof (info->protocol);
 
 		pos += ssq_strncpy(info->name, resp + pos, 256);
 
@@ -316,16 +338,16 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 		pos += ssq_strncpy(info->game, resp + pos, 256);
 
 		info->id = CAST(uint16_t, resp + pos);
-		pos += sizeof(info->id);
+		pos += sizeof (info->id);
 
 		info->players = CAST(byte, resp + pos);
-		pos += sizeof(info->players);
+		pos += sizeof (info->players);
 
 		info->max_players = CAST(byte, resp + pos);
-		pos += sizeof(info->max_players);
+		pos += sizeof (info->max_players);
 
 		info->bots = CAST(byte, resp + pos);
-		pos += sizeof(info->bots);
+		pos += sizeof (info->bots);
 
 		int8_t server_type = CAST(int8_t, resp + pos);
 		switch (server_type)
@@ -343,7 +365,7 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 			break;
 
 		}
-		pos += sizeof(server_type);
+		pos += sizeof (server_type);
 
 		int8_t environment = CAST(int8_t, resp + pos);
 		switch (environment)
@@ -361,35 +383,35 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 			info->environment = ENVIRONMENT_LINUX;
 			break;
 		}
-		pos += sizeof(environment);
+		pos += sizeof (environment);
 
 		info->visibility = CAST(byte, resp + pos);
-		pos += sizeof(info->visibility);
+		pos += sizeof (info->visibility);
 
 		info->vac = CAST(byte, resp + pos);
-		pos += sizeof(info->vac);
+		pos += sizeof (info->vac);
 
 		pos += ssq_strncpy(info->version, resp + pos, 32);
 
 		info->edf = CAST(byte, resp + pos);
-		pos += sizeof(info->edf);
+		pos += sizeof (info->edf);
 
 		if (info->edf & 0x80)
 		{
 			info->port = CAST(uint16_t, resp + pos);
-			pos += sizeof(info->port);
+			pos += sizeof (info->port);
 		}
 
 		if (info->edf & 0x10)
 		{
 			info->steamid = CAST(uint64_t, resp + pos);
-			pos += sizeof(info->steamid);
+			pos += sizeof (info->steamid);
 		}
 
 		if (info->edf & 0x40)
 		{
 			info->spectator_port = CAST(uint16_t, resp + pos);
-			pos += sizeof(info->spectator_port);
+			pos += sizeof (info->spectator_port);
 
 			pos += ssq_strncpy(info->spectator_name, resp + pos, 256);
 		}
@@ -402,7 +424,7 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 		if (info->edf & 0x01)
 		{
 			info->gameid = CAST(uint64_t, resp + pos);
-			pos += sizeof(info->gameid);
+			pos += sizeof (info->gameid);
 		}
 	}
 
@@ -411,7 +433,7 @@ SSQCode ssq_info(SSQHandle *const handle, A2SInfo *const info)
 	return code;
 }
 
-SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *const count)
+SSQCode ssq_player(SSQHandle *handle, A2SPlayer **players, byte *count)
 {
 	SSQCode code = SSQ_OK;
 
@@ -444,22 +466,22 @@ SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *con
 	if (code == SSQ_OK)
 	{
 		*count = CAST(byte, resp + pos);
-		pos += sizeof(*count);
+		pos += sizeof (*count);
 
-		*players = calloc(*count, sizeof(A2SPlayer));
+		*players = calloc(*count, sizeof (A2SPlayer));
 
 		for (uint16_t i = 0; i < *count; ++i)
 		{
 			// skip 'index' field
-			pos += sizeof(byte);
+			pos += sizeof (byte);
 
 			pos += ssq_strncpy((*players)[i].name, resp + pos, 32);
 
 			(*players)[i].score = CAST(int32_t, resp + pos);
-			pos += sizeof((*players)[i].score);
+			pos += sizeof ((*players)[i].score);
 
 			(*players)[i].duration = CAST(float, resp + pos);
-			pos += sizeof((*players)[i].duration);
+			pos += sizeof ((*players)[i].duration);
 		}
 	}
 
@@ -468,7 +490,7 @@ SSQCode ssq_player(SSQHandle *const handle, A2SPlayer **const players, byte *con
 	return code;
 }
 
-SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *const count)
+SSQCode ssq_rules(SSQHandle *handle, A2SRules **rules, uint16_t *count)
 {
 	SSQCode code = SSQ_OK;
 
@@ -501,9 +523,9 @@ SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *con
 	if (code == SSQ_OK)
 	{
 		*count = CAST(uint16_t, resp + pos);
-		pos += sizeof(*count);
+		pos += sizeof (*count);
 
-		*rules = calloc(*count, sizeof(A2SRules));
+		*rules = calloc(*count, sizeof (A2SRules));
 
 		for (uint16_t i = 0; i < *count; ++i)
 		{
@@ -517,7 +539,7 @@ SSQCode ssq_rules(SSQHandle *const handle, A2SRules **const rules, uint16_t *con
 	return code;
 }
 
-A2SRules *ssq_get_rule(const char *const name, A2SRules *const rules, const byte count)
+A2SRules *ssq_get_rule(const char *name, A2SRules *rules, const byte count)
 {
 	for (byte i = 0; i < count; ++i)
 	{
