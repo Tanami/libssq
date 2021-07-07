@@ -165,7 +165,7 @@ void ssq_set_timeout(SSQHandle *handle, const SSQTimeout timeout, const time_t m
  * @param hostname address of the server to query
  * @param port     port number of the server to query
  */
-void ssq_set_address(SSQHandle *handle, const char *address, const uint16_t port);
+void ssq_set_address(SSQHandle *handle, const char *hostname, const uint16_t port);
 
 /**
  * Sends an A2S_INFO query to a server

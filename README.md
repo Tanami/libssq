@@ -55,8 +55,7 @@ int main()
     SSQHandle handle;
 
     // set the address of the server
-    if (!ssq_set_address(&handle, address, port))
-        errx(1, "invalid IPv4 address: %s", address);
+    ssq_set_address(&handle, address, port);
 
     // set the send timeout to 5s
     ssq_set_timeout(&handle, SSQ_TIMEOUT_SEND, 5000);
