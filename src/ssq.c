@@ -29,6 +29,10 @@ typedef int SOCKET;
 
 #endif // _WIN32
 
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+
 typedef struct
 {
 	/** -2 means the packet is split, -1 means the packet is not split */
@@ -549,3 +553,7 @@ A2SRules *ssq_get_rule(const char *name, A2SRules *rules, const byte count)
 
 	return NULL;
 }
+
+#ifdef __cplusplus
+}
+#endif // __cplusplus
