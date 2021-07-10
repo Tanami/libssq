@@ -15,7 +15,11 @@
 
 #define CAST(x, y) *((x *) (y))
 
-#ifndef _WIN32
+#ifdef _WIN32
+
+#include <WS2tcpip.h>
+
+#else // _WIN32
 
 #include <arpa/inet.h>
 #include <netdb.h>
