@@ -53,23 +53,23 @@ enum SSQCode
 
 enum SSQTimeout
 {
-	SSQ_TIMEOUT_RECV = 0,
-	SSQ_TIMEOUT_SEND = 1,
+    SSQ_TIMEOUT_RECV = 0,
+    SSQ_TIMEOUT_SEND = 1,
     SSQ_TIMEOUT_BOTH = 2
 };
 
 enum A2SServerType
 {
     SERVER_TYPE_DEDICATED      = 'd',
-	SERVER_TYPE_NON_DEDICATED  = 'l',
-	SERVER_TYPE_SOURCETV_RELAY = 'p'
+    SERVER_TYPE_NON_DEDICATED  = 'l',
+    SERVER_TYPE_SOURCETV_RELAY = 'p'
 };
 
 enum A2SEnvironment
 {
     ENVIRONMENT_LINUX   = 'l',
-	ENVIRONMENT_WINDOWS = 'w',
-	ENVIRONMENT_MAC     = 'm'
+    ENVIRONMENT_WINDOWS = 'w',
+    ENVIRONMENT_MAC     = 'm'
 };
 
 struct A2SInfo
