@@ -4,151 +4,52 @@
 
 libssq is a C library for querying Source servers.
 
-## How to use it
+## Why C ?
 
-Up to this day, these 3 main queries are supported :
+I wrote this library in C as a personal project in order to improve in this language I love.
+
+## Manual
+
+This protocol currently supported the three non-deprecated queries which are listed below:
 - `A2S_INFO`: retrieves information about the server
 - `A2S_PLAYER`: retrieves information about the players
 - `A2S_RULES`: retrieves the server's rules
 
-For more details, please refer to Valve's [server queries documentation](https://developer.valvesoftware.com/wiki/Server_queries).
+For more details about each query, please refer to Valve's [server queries documentation](https://developer.valvesoftware.com/wiki/Server_queries).
 
-## Issuing a query
-
-Before we can issue any query, we must set a timeout for sending and receiving data as well as setting the
-address of the server we would like to query. To do so we declare an `SSQHandle` struct and initialize it
-using the `ssq_set_timeout` and `ssq_set_address` functions.
+Before we can issue any query, we must initialize an `SSQHandle`. This opaque structure holds some data such as the timeouts for sending and receiving as well as the server's address obtained using `getaddrinfo`. It gets allocated on the heap and must be freed using the `ssq_free` function.
 
 ```c
-SSQHandle handle;
+const time_t timeout = 5000; // ms
 
-// setting a timeout
+// initializes an SSQ handle for the target host example.com on
+// port number 27015 with a sendto and recvfrom timeout of 5 sec
+SSQHandle *ssq = ssq_init("example.com", 27015, timeout);
 
-ssq_set_timeout(&handle, SSQ_TIMEOUT_SEND, 5000); // sets a 5s timeout for sending
-ssq_set_timeout(&handle, SSQ_TIMEOUT_RECV, 5000); // sets a 5s timeout for receiving
+// ...
 
-// setting the server's address
-ssq_set_address(&handle, "xxx.xxx.xxx.xxx", 12345);
+ssq_free(ssq);
 ```
 
-Handles allow you to query multiple servers at the same time using multi-threading.
+Please refer to this repo's [wiki](https://github.com/BinaryAlien/libssq/wiki) for documentation about each function of the library.
 
-Once we set the timeout for both `SSQ_TIMEOUT_SEND` and `SSQ_TIMEOUT_RECV` as well as the address of the server
-we would like to query, we can use the corresponding functions to issue any given query.
-
-Here is an example using each supported query listed above
+From now on, we can change the address of an `SSQHandle` as well as its sendto and recvfrom timeouts by using `ssq_set_address` and `ssq_set_timeout` respectively.
 
 ```c
-#include <stdio.h>
-#include <err.h>
-#include <ssq.h>
+// sets the target address to "1.2.3.4" on port number 27015
+if (!ssq_set_address("1.2.3.4", 27015))
+    // error handling
 
-int main()
-{
-    const char *address = "xxx.xxx.xxx.xxx";
-    const uint16_t port = 27015;
+ssq_set_timeout(ssq, SSQ_TIMEOUT_SEND, 5000);
+ssq_set_timeout(ssq, SSQ_TIMEOUT_RECV, 5000);
 
-    /**
-     * initialization
-     */
+// or ...
 
-    SSQHandle handle;
-
-    // set the address of the server
-    ssq_set_address(&handle, address, port);
-
-    // set the send timeout to 5s
-    ssq_set_timeout(&handle, SSQ_TIMEOUT_SEND, 5000);
-
-    // set the recv timeout to 5s
-    ssq_set_timeout(&handle, SSQ_TIMEOUT_RECV, 5000);
-
-
-    SSQCode code; // result code of our function calls
-
-
-    /**
-     * sending an A2S_INFO query
-     */
-
-    A2SInfo info = {};
-
-    if ((code = ssq_info(&handle, &info)) != SSQ_OK)
-        errx(1, "A2S_INFO query failed: code %d", code);
-
-    printf("Name: %s\n", info.name);
-    printf("Players: %hhu/%hhu\n", info.players, info.max_players);
-
-    // ...
-
-
-    /**
-     * sending an A2S_PLAYER query
-     */
-
-    A2SPlayer *players;
-    uint8_t player_count;
-
-    if ((code = ssq_player(&handle, &players, &player_count)) != SSQ_OK)
-        errx(1, "A2S_PLAYER query failed: code %d", code);
-
-    for (uint8_t i = 0; i < player_count; ++i)
-    {
-        printf("%s | score: %d | time connected: %fs\n", players[i].name, players[i].score, players[i].duration);
-    }
-
-    printf("\n");
-
-    // ...
-
-    free(players); // WARNING: must be freed
-
-
-    /**
-     * sending an A2S_RULES query
-     */
-
-     A2SRules *rules;
-     uint16_t rules_count;
-
-     if ((code = ssq_rules(&handle, &rules, &rules_count)) != SSQ_OK)
-        errx(1, "A2S_RULES query failed: code %d", code);
-
-    for (uint16_t i = 0; i < rules_count; ++i)
-    {
-        printf("%s = %s\n", rules[i].name, rules[i].value);
-    }
-
-    printf("\n");
-
-    // ...
-
-    free(rules); // WARNING: must be freed
-
-    return 0;
-}
+ssq_set_timeout(ssq, SSQ_TIMEOUT_BOTH, 5000);
 ```
+
+Be sure to check out this repo's [wiki](https://github.com/BinaryAlien/libssq/wiki) for documentation about each function as well as the `example` folder which contains an example program which exploits each of the three queries.
 
 ## Dependencies
 
 There are no dependencies for this project.
-
-## Building
-
-In order to build this library : clone this repository, and create a `build` folder.
-
-From this folder, run `cmake ..` to generate the buildsystem.
-
-Once the buildsystem is ready, run `cmake --build .` in order to build the library.
-
-The resulting library will be a static one by default.
-
-## Notice
-
-This library is a personal project I've initiated in order to improve in the C programming language.
-
-It is designed to work both under UNIX-like environments and Windows, however it was mostly tested under a UNIX
-environment and on Team Fortress 2 servers.
-
-Please be cautious if you plan to use this library, as it may have some problems I have not noticed due to
-very basic testing.

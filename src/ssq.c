@@ -1,563 +1,660 @@
+/**
+ * MIT License
+ * Copyright (c) 2021 BinaryAlien
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #include "ssq.h"
-#include <string.h>
+
+#include <assert.h>
 #include <stdio.h>
-
-#define SSQ_PACKET_SIZE 1400
-
-#define A2S_INFO   "\xFF\xFF\xFF\xFF\x54Source Engine Query\0"
-#define A2S_PLAYER "\xFF\xFF\xFF\xFF\x55\xFF\xFF\xFF\xFF"
-#define A2S_RULES  "\xFF\xFF\xFF\xFF\x56\xFF\xFF\xFF\xFF"
-
-#define S2A_CHALLENGE 0x41
-#define S2A_INFO      0x49
-#define S2A_PLAYER    0x44
-#define S2A_RULES     0x45
-
-#define CAST(x, y) *((x *) (y))
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef _WIN32
-
-#include <WS2tcpip.h>
-
-#else // _WIN32
-
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <sys/select.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#define INVALID_SOCKET -1
-
-typedef int SOCKET;
-
-#endif // _WIN32
-
-#ifdef __cplusplus
-extern "C" {
-#endif // __cplusplus
-
-typedef struct
-{
-	/** -2 means the packet is split, -1 means the packet is not split */
-	int32_t header;
-
-	/** unique number assigned by server per answer */
-	int32_t id;
-
-	/** the total number of packets in the response */
-	byte total;
-
-	/** the number of the packet */
-	byte number;
-
-	/** maximum size of packet before packet switching occurs */
-	uint16_t size;
-
-	int8_t *payload;
-} SSQPacket;
-
-static size_t ssq_strncpy(char *const dest, const char *const src, const size_t len)
-{
-	size_t pos = 0;
-
-	for (; src[pos] != 0 && pos < len - 1; ++pos)
-	{
-		dest[pos] = src[pos];
-	}
-
-	for (size_t i = pos; i < len; ++i)
-	{
-		dest[i] = 0;
-	}
-
-	return pos + 1;
-}
-
-static inline bool ssq_is_truncated(const void *const payload)
-{
-	return CAST(int32_t, payload) == -1;
-}
-
-static bool ssq_parse_packet(const char *const buffer, SSQPacket *packet)
-{
-	size_t pos = 0;
-
-	packet->header = CAST(int32_t, buffer + pos);
-	pos += sizeof (packet->header);
-
-	if (packet->header == -2) // multi-packet response
-	{
-		packet->id = CAST(int32_t, buffer + pos);
-		pos += sizeof (packet->id);
-
-		packet->total = CAST(byte, buffer + pos);
-		pos += sizeof (packet->total);
-
-		packet->number = CAST(byte, buffer + pos);
-		pos += sizeof (packet->number);
-
-		packet->size = CAST(uint16_t, buffer + pos);
-		pos += sizeof (packet->size);
-	}
-	else if (packet->header != -1) // not a single packet response
-	{
-		return 0;
-	}
-
-	packet->payload = malloc(SSQ_PACKET_SIZE - pos);
-	memcpy(packet->payload, buffer + pos, SSQ_PACKET_SIZE - pos);
-
-	return 1;
-}
-
-static void ssq_combine_packets(const SSQPacket *const packets, const uint16_t count, char **const resp)
-{
-	if (count == 1) // single-packet response
-	{
-		const size_t size = SSQ_PACKET_SIZE - sizeof (packets->header);
-		*resp = calloc(size, sizeof (char));
-		memcpy(*resp, packets->payload, size);
-	}
-	else // multi-packet response
-	{
-		size_t size = 0;
-
-		for (uint16_t i = 0; i < count; ++i)
-		{
-			size += packets[i].size;
-		}
-
-		*resp = calloc(size, sizeof (char));
-
-		size_t pos = 0;
-
-		for (uint16_t i = 0; i < count; ++i)
-		{
-			memcpy(*resp + pos, packets[i].payload, packets[i].size);
-			pos += packets[i].size;
-		}
-	}
-}
-
-static SSQCode ssq_send_query(SSQHandle *const handle, const void *const payload, size_t len, char **const resp)
-{
-	SSQCode code = SSQ_OK;
-
-	// hints for getaddrinfo
-	struct addrinfo hints;
-	memset(&hints, 0, sizeof (hints));
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_DGRAM;
-
-	// address list obtained by getaddrinfo
-	struct addrinfo *addr_list;
-
-	struct addrinfo addr;
-
-	SOCKET sockfd = INVALID_SOCKET;
-
-	if (getaddrinfo(handle->hostname, handle->port, &hints, &addr_list) == 0)
-	{
-		for (struct addrinfo *cur = addr_list; cur != NULL; cur = cur->ai_next)
-		{
-			sockfd = socket(cur->ai_family, cur->ai_socktype, cur->ai_protocol);
-
-			if (sockfd != INVALID_SOCKET)
-			{
-				// copy the address
-				memcpy(&addr, cur, sizeof (struct addrinfo));
-				break;
-			}
-		}
-	}
-	else
-	{
-		return SSQ_INVALID_ADDR;
-	}
-
-	// free the address list
-	freeaddrinfo(addr_list);
-
-	if (sockfd == INVALID_SOCKET)
-		return SSQ_SOCK_CREATE_FAIL;
-
-	fd_set fds;
-	FD_ZERO(&fds);
-	FD_SET(sockfd, &fds);
-
-	const int ndfs = sockfd + 1;
-
-	// buffer to read the data from the socket
-	char buffer[SSQ_PACKET_SIZE];
-
-	// check for write state on the socket file descriptor
-	if (select(ndfs, NULL, &fds, NULL, &handle->timeout_send) <= 0)
-		code = SSQ_SOCK_SND_TIMEOUT;
-	else if (sendto(sockfd, payload, len, 0, addr.ai_addr, addr.ai_addrlen) == -1)
-		code = SSQ_SOCK_SND_ERR;
-	// check for read state on the socket file descriptor
-	else if (select(ndfs, NULL, &fds, NULL, &handle->timeout_recv) <= 0)
-		code = SSQ_SOCK_RCV_TIMEOUT;
-	else if (recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL) == -1)
-		code = SSQ_SOCK_RCV_ERR;
-
-	if (code != SSQ_OK)
-	{
-#ifdef _WIN32
-		closesocket(sockfd);
+# include <winsock2.h>
 #else
-		close(sockfd);
+# include <netdb.h>
+# include <unistd.h>
 #endif // _WIN32
 
-		return code;
-	}
+#define SSQ_PACKET_SIZE          1400
 
-	SSQPacket packet;          // temporary packet
-	SSQPacket *packets = NULL; // array of received packets (in the right order)
+#define A2S_PACKET_HEADER_SINGLE -1
+#define A2S_PACKET_HEADER_MULTI  -2
 
-	if (!ssq_parse_packet(buffer, &packet))
-		return SSQ_INVALID_RESP;
+#define A2S_INFO                 "\xff\xff\xff\xff\x54Source Engine Query"
+#define A2S_INFO_LEN             25
 
-	const byte count = (packet.header == -2) ? packet.total : 1; // number of packets
+#define A2S_PLAYER               "\xff\xff\xff\xff\x55\xff\xff\xff\xff"
+#define A2S_PLAYER_LEN           9
 
-	// allocate memory to store the packets
-	packets = calloc(count, sizeof (SSQPacket));
+#define A2S_RULES                "\xff\xff\xff\xff\x56\xff\xff\xff\xff"
+#define A2S_RULES_LEN            9
 
-	if (packet.header == -2) // multi-packet response
-	{
-		// copy the first packet received
-		memcpy(packets, &packet, sizeof (SSQPacket));
+#define S2A_INFO                 0x49
+#define S2A_PLAYER               0x44
+#define S2A_RULES                0x45
+#define S2A_CHALL                0x41
 
-		for (byte i = 1; i < count; ++i)
-		{
-			// check for read state on the socket file descriptor
-			if (select(ndfs, NULL, &fds, NULL, &handle->timeout_recv) <= 0)
-			{
-				code = SSQ_SOCK_RCV_TIMEOUT;
-				break;
-			}
+#define SSQ_CAST(type, ptr)      *((type *) (ptr))
+#define SSQ_EXTRACT(dst)         memcpy(&(dst), resp + pos, sizeof (dst));  pos += sizeof (dst)
+#define SSQ_EXTRACT_STR(dst)     dst = ssq_extract_str(resp + pos, &len); pos += len + 1
 
-			if (recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL) == -1)
-			{
-				code = SSQ_SOCK_RCV_ERR;
-				break;
-			}
+#define SSQ_SET_CODE(c)          if (code != NULL) *code = c
 
-			if (!ssq_parse_packet(buffer, &packet))
-			{
-				code = SSQ_INVALID_RESP;
-				break;
-			}
+struct SSQHandle
+{
+    struct timeval   timeout_send;
+    struct timeval   timeout_recv;
+    struct addrinfo *addr_list;
+};
 
-			// TODO: ID
-			if (packet.header != -2)
-			{
-				code = SSQ_INVALID_RESP;
-				break;
-			}
+struct SSQPacket
+{
+    int32_t  header;  /** The packet's header */
+    int32_t  id;      /** Unique number assigned by server per answer */
+    byte     total;   /** The total number of packets in the response */
+    byte     number;  /** The number of the packet */
+    uint16_t size;    /** The size of the payload */
+    char    *payload; /** The packet's payload */
+};
 
-			// copy the packet
-			memcpy(packets + packet.number, &packet, sizeof (SSQPacket));
-		}
-	}
-	else // single-packet response
-	{
-		// copy the packet
-		memcpy(packets, &packet, sizeof (SSQPacket));
-	}
+const struct SSQPacket *ssq_init_packet(const char buffer[], const size_t bytes_received, enum SSQCode *const code)
+{
+    struct SSQPacket *res = malloc(sizeof (*res));
+
+    if (res == NULL)
+    {
+        SSQ_SET_CODE(SSQ_ALLOCATION_FAIL);
+        return NULL;
+    }
+
+    size_t pos = 0;
+
+    res->header = SSQ_CAST(int32_t, buffer + pos);
+    pos         += sizeof (res->header);
+
+    if (res->header == A2S_PACKET_HEADER_SINGLE)
+    {
+        res->number = 0;
+        res->total  = 1;
+        res->size   = bytes_received - sizeof (res->header);
+    }
+    else if (res->header == A2S_PACKET_HEADER_MULTI)
+    {
+        res->id     = SSQ_CAST(int32_t, buffer + pos);
+        pos         += sizeof (res->id);
+
+        res->total  = SSQ_CAST(byte, buffer + pos);
+        pos         += sizeof (res->total);
+
+        res->number = SSQ_CAST(byte, buffer + pos);
+        pos         += sizeof (res->number);
+
+        res->size   = SSQ_CAST(uint16_t, buffer + pos);
+        pos         += sizeof (res->size);
+    }
+    else
+    {
+        free(res);
+        return NULL;
+    }
+
+    res->payload = malloc(res->size);
+
+    if (res->payload == NULL)
+    {
+        SSQ_SET_CODE(SSQ_ALLOCATION_FAIL);
+        free(res);
+        res = NULL;
+    }
+    else
+    {
+        memcpy(res->payload, buffer + pos, res->size);
+    }
+
+    return res;
+}
+
+void ssq_free_packet(const struct SSQPacket *const packet)
+{
+    free(packet->payload);
+    free((void *) packet);
+}
+
+void ssq_free_packets(const struct SSQPacket **packets, const byte count)
+{
+    for (byte i = 0; i < count; ++i)
+        ssq_free_packet(packets[i]);
+
+    free((void *) packets);
+}
+
+const char *ssq_merge_packets(const struct SSQPacket *packets[], const byte count, size_t *const len, enum SSQCode *const code)
+{
+    *len = 0;
+
+    // compute total length
+    for (byte i = 0; i < count; ++i)
+        *len += packets[i]->size;
+
+    char *const res = calloc(*len, sizeof (*res));
+
+    if (res != NULL)
+    {
+        size_t pos = 0;
+
+        for (byte i = 0; i < count; ++i)
+        {
+            memcpy(res + pos, packets[i]->payload, packets[i]->size);
+            pos += packets[i]->size;
+        }
+    }
+    else
+    {
+        SSQ_SET_CODE(SSQ_ALLOCATION_FAIL);
+    }
+
+    return res;
+}
+
+const char *ssq_query(const struct SSQHandle *handle, const char payload[], const size_t payload_len, size_t *const len, enum SSQCode *const code)
+{
+    SSQ_SET_CODE(SSQ_OK);
+
+    const struct SSQHandle *const hdl = handle;
+    const struct addrinfo  *addr      = handle->addr_list;
+    int                     sockfd    = -1;
+
+    for (; addr != NULL; addr = addr->ai_next)
+    {
+        sockfd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+
+        if (sockfd != -1)
+            break;
+    }
+
+    const struct SSQPacket **packets      = NULL; // ordered array of pointers to packets in the response
+    byte                     packet_count = 1;
+
+    if (sockfd == -1)
+    {
+        SSQ_SET_CODE(SSQ_SOCKET_CREATION_FAIL);
+    }
+    else
+    {
+        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &hdl->timeout_recv, sizeof (hdl->timeout_recv)) == -1 ||
+            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &hdl->timeout_send, sizeof (hdl->timeout_send)) == -1)
+        {
+            SSQ_SET_CODE(SSQ_SOCKET_CONFIG_FAIL);
+        }
+        else if (sendto(sockfd, payload, payload_len, 0, addr->ai_addr, addr->ai_addrlen) == -1)
+        {
+            SSQ_SET_CODE(SSQ_SOCKET_SENDTO_FAIL);
+        }
+        else
+        {
+            for (byte packets_received = 0; packets_received < packet_count; ++packets_received)
+            {
+                char          buffer[SSQ_PACKET_SIZE];
 
 #ifdef _WIN32
-	closesocket(sockfd);
+                const int bytes_received = recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL);
 #else
-	close(sockfd);
+                const ssize_t bytes_received = recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL);
 #endif // _WIN32
 
-	if (code == SSQ_OK)
-	{
-		// combine the packets into a unique buffer
-		ssq_combine_packets(packets, count, resp);
-	}
+                if (bytes_received == -1)
+                {
+                    SSQ_SET_CODE(SSQ_SOCKET_RECVFROM_FAIL);
 
-	for (uint16_t i = 0; i < count; ++i)
-	{
-		free(packets[i].payload);
-	}
+                    if (packets != NULL)
+                    {
+                        ssq_free_packets(packets, packet_count);
+                        packets = NULL;
+                    }
 
-	free(packets);
+                    break;
+                }
 
-	return code;
+                const struct SSQPacket *const packet = ssq_init_packet(buffer, bytes_received, code);
+
+                if (packet == NULL) // error in the received packet
+                {
+                    if (packets != NULL)
+                    {
+                        ssq_free_packets(packets, packet_count);
+                        packets = NULL;
+                    }
+
+                    break;
+                }
+                else
+                {
+                    if (packets == NULL) // we received our first packet
+                    {
+                        // get the number of packets in the response
+                        // and allocate some memory for each of them
+                        packet_count = packet->total;
+                        packets      = calloc(packet_count, sizeof (*packets));
+
+                        if (packets == NULL)
+                        {
+                            SSQ_SET_CODE(SSQ_ALLOCATION_FAIL);
+                            break;
+                        }
+                    }
+
+                    // save the received packet at its corresponding slot
+                    packets[packet->number] = packet;
+                }
+            }
+        }
+
+#ifdef _WIN32
+        closesocket(sockfd);
+#else
+        close(sockfd);
+#endif
+    }
+
+    const char *res = NULL;
+    *len = 0;
+
+    if (packets != NULL)
+    {
+        res = ssq_merge_packets(packets, packet_count, len, code);
+        ssq_free_packets(packets, packet_count);
+    }
+
+    return res;
 }
 
-void ssq_set_address(SSQHandle *handle, const char *hostname, const uint16_t port)
+char *ssq_extract_str(const char src[], size_t *const len)
 {
-	strncpy(handle->hostname, hostname, SSQ_HOSTNAME_LEN);
-	sprintf(handle->port, "%hu", port);
+    *len = strlen(src);
+
+    char *res = (char *) calloc(*len, sizeof (*res));
+
+    if (res != NULL)
+        memcpy(res, src, *len);
+
+    return res;
 }
 
-void ssq_set_timeout(SSQHandle *handle, const SSQTimeout timeout, const time_t millis)
+bool ssq_payload_is_truncated(const char payload[])
 {
-	struct timeval *const tv = (timeout == SSQ_TIMEOUT_SEND) ? &handle->timeout_send : &handle->timeout_recv;
-	tv->tv_sec = millis / 1000;
-	tv->tv_usec = millis % 1000 * 1000;
+    return SSQ_CAST(int32_t, payload) == A2S_PACKET_HEADER_SINGLE;
 }
 
-SSQCode ssq_info(SSQHandle *handle, A2SInfo *info)
+SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t timeout)
 {
-	SSQCode code = SSQ_OK;
+    struct SSQHandle *res = malloc(sizeof (*res));
 
-	byte req[29] = A2S_INFO;
-	char *resp;
+    if (res != NULL)
+    {
+        if (!ssq_set_address(res, hostname, port)) // invalid address
+        {
+            free(res);
+            res = NULL;
+        }
+        else
+        {
+            ssq_set_timeout(res, SSQ_TIMEOUT_BOTH, timeout);
+        }
+    }
 
-	if ((code = ssq_send_query(handle, req, 25, &resp)) != SSQ_OK)
-		return code;
-
-	while (resp[0] == S2A_CHALLENGE)
-	{
-		// copy the challenge number
-		memcpy(req + 25, resp + 1, 4);
-
-		free(resp);
-
-		// send the query with the challenge
-		if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
-			return code;
-	}
-
-	size_t pos = 0;
-
-	if (ssq_is_truncated(resp))
-		pos += 4;
-
-	if (resp[pos++] != S2A_INFO)
-		code = SSQ_INVALID_RESP;
-
-	if (code == SSQ_OK)
-	{
-		info->protocol = CAST(byte, resp + pos);
-		pos += sizeof (info->protocol);
-
-		pos += ssq_strncpy(info->name, resp + pos, 256);
-
-		pos += ssq_strncpy(info->map, resp + pos, 32);
-
-		pos += ssq_strncpy(info->folder, resp + pos, 32);
-
-		pos += ssq_strncpy(info->game, resp + pos, 256);
-
-		info->id = CAST(uint16_t, resp + pos);
-		pos += sizeof (info->id);
-
-		info->players = CAST(byte, resp + pos);
-		pos += sizeof (info->players);
-
-		info->max_players = CAST(byte, resp + pos);
-		pos += sizeof (info->max_players);
-
-		info->bots = CAST(byte, resp + pos);
-		pos += sizeof (info->bots);
-
-		int8_t server_type = CAST(int8_t, resp + pos);
-		switch (server_type)
-		{
-		case 'd':
-			info->server_type = SERVER_TYPE_DEDICATED;
-			break;
-
-		case 'p':
-			info->server_type = SERVER_TYPE_SOURCETV_RELAY;
-			break;
-
-		default:
-			info->server_type = SERVER_TYPE_NON_DEDICATED;
-			break;
-
-		}
-		pos += sizeof (server_type);
-
-		int8_t environment = CAST(int8_t, resp + pos);
-		switch (environment)
-		{
-		case 'w':
-			info->environment = ENVIRONMENT_WINDOWS;
-			break;
-
-		case 'm':
-		case 'o':
-			info->environment = ENVIRONMENT_MAC;
-			break;
-
-		default:
-			info->environment = ENVIRONMENT_LINUX;
-			break;
-		}
-		pos += sizeof (environment);
-
-		info->visibility = CAST(byte, resp + pos);
-		pos += sizeof (info->visibility);
-
-		info->vac = CAST(byte, resp + pos);
-		pos += sizeof (info->vac);
-
-		pos += ssq_strncpy(info->version, resp + pos, 32);
-
-		info->edf = CAST(byte, resp + pos);
-		pos += sizeof (info->edf);
-
-		if (info->edf & 0x80)
-		{
-			info->port = CAST(uint16_t, resp + pos);
-			pos += sizeof (info->port);
-		}
-
-		if (info->edf & 0x10)
-		{
-			info->steamid = CAST(uint64_t, resp + pos);
-			pos += sizeof (info->steamid);
-		}
-
-		if (info->edf & 0x40)
-		{
-			info->spectator_port = CAST(uint16_t, resp + pos);
-			pos += sizeof (info->spectator_port);
-
-			pos += ssq_strncpy(info->spectator_name, resp + pos, 256);
-		}
-
-		if (info->edf & 0x20)
-		{
-			pos += ssq_strncpy(info->keywords, resp + pos, 256);
-		}
-
-		if (info->edf & 0x01)
-		{
-			info->gameid = CAST(uint64_t, resp + pos);
-			pos += sizeof (info->gameid);
-		}
-	}
-
-	free(resp);
-
-	return code;
+    return res;
 }
 
-SSQCode ssq_player(SSQHandle *handle, A2SPlayer **players, byte *count)
+bool ssq_set_address(SSQHandle *const handle, const char hostname[], const uint16_t port)
 {
-	SSQCode code = SSQ_OK;
+    struct SSQHandle *hdl = handle;
+    char              service[16];
 
-	byte req[9] = A2S_PLAYER;
-	char *resp;
+    if (hdl->addr_list != NULL)
+        freeaddrinfo(hdl->addr_list);
 
-	if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
-		return code;
+    sprintf(service, "%hu", port);
 
-	while (resp[0] == S2A_CHALLENGE)
-	{
-		// copy the challenge number
-		memcpy(req + 5, resp + 1, 4);
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof (hints));
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
 
-		free(resp);
-
-		// send the query with the challenge
-		if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
-			return code;
-	}
-
-	size_t pos = 0;
-
-	if (ssq_is_truncated(resp))
-		pos += 4;
-
-	if (resp[pos++] != S2A_PLAYER)
-		code = SSQ_INVALID_RESP;
-
-	if (code == SSQ_OK)
-	{
-		*count = CAST(byte, resp + pos);
-		pos += sizeof (*count);
-
-		*players = calloc(*count, sizeof (A2SPlayer));
-
-		for (uint16_t i = 0; i < *count; ++i)
-		{
-			// skip 'index' field
-			pos += sizeof (byte);
-
-			pos += ssq_strncpy((*players)[i].name, resp + pos, 32);
-
-			(*players)[i].score = CAST(int32_t, resp + pos);
-			pos += sizeof ((*players)[i].score);
-
-			(*players)[i].duration = CAST(float, resp + pos);
-			pos += sizeof ((*players)[i].duration);
-		}
-	}
-
-	free(resp);
-
-	return code;
+    return getaddrinfo(hostname, service, &hints, &hdl->addr_list) == 0;
 }
 
-SSQCode ssq_rules(SSQHandle *handle, A2SRules **rules, uint16_t *count)
+void ssq_set_timeout(SSQHandle *const handle, const enum SSQTimeout timeout, const time_t value)
 {
-	SSQCode code = SSQ_OK;
+    struct SSQHandle *const hdl = handle;
 
-	byte req[9] = A2S_RULES;
-	char *resp;
-
-	if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
-		return code;
-
-	while (resp[0] == S2A_CHALLENGE)
-	{
-		// copy the challenge number
-		memcpy(req + 5, resp + 1, 4);
-
-		free(resp);
-
-		// send the query with the challenge
-		if ((code = ssq_send_query(handle, req, 9, &resp)) != SSQ_OK)
-			return code;
-	}
-
-	size_t pos = 0;
-
-	if (ssq_is_truncated(resp))
-		pos += 4;
-
-	if (resp[pos++] != S2A_RULES)
-		code = SSQ_INVALID_RESP;
-
-	if (code == SSQ_OK)
-	{
-		*count = CAST(uint16_t, resp + pos);
-		pos += sizeof (*count);
-
-		*rules = calloc(*count, sizeof (A2SRules));
-
-		for (uint16_t i = 0; i < *count; ++i)
-		{
-			pos += ssq_strncpy((*rules)[i].name,  resp + pos, 128);
-			pos += ssq_strncpy((*rules)[i].value, resp + pos, 256);
-		}
-	}
-
-	free(resp);
-
-	return code;
+    if (timeout == SSQ_TIMEOUT_BOTH)
+    {
+        ssq_set_timeout(handle, SSQ_TIMEOUT_RECV, value);
+        ssq_set_timeout(handle, SSQ_TIMEOUT_SEND, value);
+    }
+    else
+    {
+        struct timeval *const tv = (timeout == SSQ_TIMEOUT_RECV) ? &hdl->timeout_recv : &hdl->timeout_send;
+        tv->tv_sec  = value / 1000;
+        tv->tv_usec = value % 1000 * 1000;
+    }
 }
 
-A2SRules *ssq_get_rule(const char *name, A2SRules *rules, const byte count)
+void ssq_free(const SSQHandle *const handle)
 {
-	for (byte i = 0; i < count; ++i)
-	{
-		if (strcmp(rules[i].name, name) == 0)
-			return &rules[i];
-	}
-
-	return NULL;
+    const struct SSQHandle *const hdl = handle;
+    freeaddrinfo(hdl->addr_list);
+    free((void *) hdl);
 }
 
-#ifdef __cplusplus
+struct A2SInfo *ssq_info(const SSQHandle *const handle, enum SSQCode *const code)
+{
+    char        req[A2S_INFO_LEN + 4] = A2S_INFO; // 4 additional bytes if a challenge number must be sent back
+    size_t      resp_len;
+    const char *resp                  = ssq_query(handle, req, A2S_INFO_LEN, &resp_len, code);
+
+    if (resp == NULL)
+        return NULL;
+
+    while (SSQ_CAST(byte, resp) == S2A_CHALL)
+    {
+        // copy the challenge number
+        memcpy(req + A2S_INFO_LEN, resp + 1, 4);
+
+        free((void *) resp);
+        resp = ssq_query(handle, req, A2S_INFO_LEN + 4, &resp_len, code);
+    }
+
+    struct A2SInfo *res = NULL;
+    size_t          pos = 0;
+
+    if (ssq_payload_is_truncated(resp))
+        pos += 4;
+
+    if (SSQ_CAST(byte, &resp[pos++]) == S2A_INFO)
+    {
+        res = malloc(sizeof (*res));
+
+        if (res != NULL)
+        {
+            size_t len; // temporary variable to store extracted string lengths (used by SSQ_EXTRACT_STR macro)
+
+            SSQ_EXTRACT(res->protocol);
+            SSQ_EXTRACT_STR(res->name);
+            SSQ_EXTRACT_STR(res->map);
+            SSQ_EXTRACT_STR(res->folder);
+            SSQ_EXTRACT_STR(res->game);
+            SSQ_EXTRACT(res->id);
+            SSQ_EXTRACT(res->players);
+            SSQ_EXTRACT(res->max_players);
+            SSQ_EXTRACT(res->bots);
+
+            const byte server_type = SSQ_CAST(byte, resp + pos);
+            switch (server_type)
+            {
+                case 'd':
+                    res->server_type = SERVER_TYPE_DEDICATED;
+                    break;
+
+                case 'p':
+                    res->server_type = SERVER_TYPE_SOURCETV_RELAY;
+                    break;
+
+                default: // 'l'
+                    res->server_type = SERVER_TYPE_NON_DEDICATED;
+                    break;
+            }
+            pos += sizeof (server_type);
+
+            const byte environment = SSQ_CAST(byte, resp + pos);
+            switch (environment)
+            {
+                case 'w':
+                    res->environment = ENVIRONMENT_WINDOWS;
+                    break;
+
+                case 'm':
+                case 'o':
+                    res->environment = ENVIRONMENT_MAC;
+
+                default: // 'l'
+                    res->environment = ENVIRONMENT_LINUX;
+                    break;
+            }
+            pos += sizeof (environment);
+
+            SSQ_EXTRACT(res->visibility);
+            SSQ_EXTRACT(res->vac);
+            SSQ_EXTRACT_STR(res->version);
+
+            if (pos < resp_len)
+            {
+                SSQ_EXTRACT(res->edf);
+            }
+            else
+            {
+                res->edf = 0;
+            }
+
+            if (res->edf & 0x80)
+            {
+                SSQ_EXTRACT(res->port);
+            }
+
+            if (res->edf & 0x10)
+            {
+                SSQ_EXTRACT(res->steamid);
+            }
+
+            if (res->edf & 0x40)
+            {
+                SSQ_EXTRACT(res->port_sourcetv);
+                SSQ_EXTRACT_STR(res->name_sourcetv);
+            }
+
+            if (res->edf & 0x20)
+            {
+                SSQ_EXTRACT_STR(res->keywords);
+            }
+
+            if (res->edf & 0x01)
+            {
+                SSQ_EXTRACT(res->gameid);
+            }
+        }
+        else
+        {
+            SSQ_SET_CODE(SSQ_ALLOCATION_FAIL);
+        }
+    }
+    else
+    {
+        SSQ_SET_CODE(SSQ_MALFORMED_RESPONSE);
+    }
+
+    free((void *) resp);
+
+    return res;
 }
-#endif // __cplusplus
+
+void ssq_free_info(const struct A2SInfo *const info)
+{
+    free(info->name);
+    free(info->map);
+    free(info->folder);
+    free(info->game);
+    free(info->version);
+
+    if (info->edf & 0x40)
+        free(info->name_sourcetv);
+
+    if (info->edf & 0x20)
+        free(info->keywords);
+
+    free((void *) info);
+}
+
+struct A2SPlayer *ssq_player(const SSQHandle *const handle, byte *const count, enum SSQCode *const code)
+{
+    char        req[A2S_PLAYER_LEN] = A2S_PLAYER;
+    size_t      resp_len;
+    const char *resp                = ssq_query(handle, req, A2S_PLAYER_LEN, &resp_len, code);
+
+    if (resp == NULL)
+        return NULL;
+
+    while (SSQ_CAST(byte, resp) == S2A_CHALL)
+    {
+        // copy the challenge number
+        memcpy(req + A2S_PLAYER_LEN - 4, resp + 1, 4);
+
+        free((void *) resp);
+        resp = ssq_query(handle, req, A2S_PLAYER_LEN, &resp_len, code);
+
+        if (resp == NULL)
+            return NULL;
+    }
+
+    struct A2SPlayer *res = NULL;
+    size_t            pos = 0;
+
+    if (SSQ_CAST(byte, &resp[pos++]) == S2A_PLAYER)
+    {
+        SSQ_EXTRACT(*count);
+
+        res = calloc(*count, sizeof (*res));
+
+        if (res != NULL)
+        {
+            size_t len; // temporary variable to store extracted string lengths (used by SSQ_EXTRACT_STR macro)
+
+            for (byte i = 0; i < *count; ++i)
+            {
+                pos += sizeof (byte); // skip 'Index'
+                SSQ_EXTRACT_STR(res[i].name);
+                SSQ_EXTRACT(res[i].score);
+                SSQ_EXTRACT(res[i].duration);
+            }
+        }
+        else
+        {
+            SSQ_SET_CODE(SSQ_ALLOCATION_FAIL);
+        }
+    }
+    else
+    {
+        SSQ_SET_CODE(SSQ_MALFORMED_RESPONSE);
+    }
+
+    free((void *) resp);
+
+    return res;
+}
+
+void ssq_free_players(const struct A2SPlayer players[], const byte count)
+{
+    for (byte i = 0; i < count; ++i)
+        free(players[i].name);
+
+    free((void *) players);
+}
+
+struct A2SRules *ssq_rules(const SSQHandle *const handle, uint16_t *const count, enum SSQCode *const code)
+{
+    char        req[A2S_RULES_LEN] = A2S_RULES;
+    size_t      resp_len;
+    const char *resp               = ssq_query(handle, req, A2S_RULES_LEN, &resp_len, code);
+
+    if (resp == NULL)
+        return NULL;
+
+    while (SSQ_CAST(byte, resp) == S2A_CHALL)
+    {
+        // copy the challenge number
+        memcpy(req + A2S_RULES_LEN - 4, resp + 1, 4);
+
+        free((void *) resp);
+        resp = ssq_query(handle, req, A2S_RULES_LEN, &resp_len, code);
+
+        if (resp == NULL)
+            return NULL;
+    }
+
+    struct A2SRules *res = NULL;
+    size_t           pos = 0;
+
+    if (ssq_payload_is_truncated(resp))
+        pos += 4;
+
+    if (SSQ_CAST(byte, &resp[pos++]) == S2A_RULES)
+    {
+        SSQ_EXTRACT(*count);
+
+        res = calloc(*count, sizeof (*res));
+
+        if (res != NULL)
+        {
+            size_t len; // temporary variable to store extracted string lengths (used by SSQ_EXTRACT_STR macro)
+
+            for (uint16_t i = 0; i < *count; ++i)
+            {
+                SSQ_EXTRACT_STR(res[i].name);
+                SSQ_EXTRACT_STR(res[i].value);
+            }
+        }
+        else
+        {
+            SSQ_SET_CODE(SSQ_ALLOCATION_FAIL);
+        }
+    }
+    else
+    {
+        SSQ_SET_CODE(SSQ_MALFORMED_RESPONSE);
+    }
+
+    free((void *) resp);
+
+    return res;
+}
+
+struct A2SRules *ssq_get_rule(const char name[], struct A2SRules rules[], const uint16_t count)
+{
+    for (uint16_t i = 0; i < count; ++i)
+    {
+        if (strcmp(name, rules[i].name) == 0)
+            return rules + i;
+    }
+
+    return NULL;
+}
+
+void ssq_free_rules(const struct A2SRules rules[], const uint16_t count)
+{
+    for (byte i = 0; i < count; ++i)
+    {
+        free(rules[i].name);
+        free(rules[i].value);
+    }
+
+    free((void *) rules);
+}

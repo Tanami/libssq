@@ -1,4 +1,3 @@
-
 # Created by https://www.toptal.com/developers/gitignore/api/c,cmake,vim
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,cmake,vim
 
@@ -68,7 +67,6 @@ install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
 _deps
-CMakeUserPresets.json
 
 ### CMake Patch ###
 # External projects
@@ -97,4 +95,5 @@ tags
 
 # End of https://www.toptal.com/developers/gitignore/api/c,cmake,vim
 
+.vscode/
 build/
