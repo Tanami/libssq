@@ -23,7 +23,6 @@
 
 #include "ssq.h"
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,7 +76,7 @@ struct SSQPacket
     char    *payload; /** The packet's payload */
 };
 
-const struct SSQPacket *ssq_init_packet(const char buffer[], const size_t bytes_received, enum SSQCode *const code)
+static const struct SSQPacket *ssq_init_packet(const char buffer[], const size_t bytes_received, enum SSQCode *const code)
 {
     struct SSQPacket *res = malloc(sizeof (*res));
 
@@ -134,13 +133,13 @@ const struct SSQPacket *ssq_init_packet(const char buffer[], const size_t bytes_
     return res;
 }
 
-void ssq_free_packet(const struct SSQPacket *const packet)
+static void ssq_free_packet(const struct SSQPacket *const packet)
 {
     free(packet->payload);
     free((void *) packet);
 }
 
-void ssq_free_packets(const struct SSQPacket **packets, const byte count)
+static void ssq_free_packets(const struct SSQPacket **packets, const byte count)
 {
     for (byte i = 0; i < count; ++i)
         ssq_free_packet(packets[i]);
@@ -148,7 +147,7 @@ void ssq_free_packets(const struct SSQPacket **packets, const byte count)
     free((void *) packets);
 }
 
-const char *ssq_merge_packets(const struct SSQPacket *packets[], const byte count, size_t *const len, enum SSQCode *const code)
+static const char *ssq_merge_packets(const struct SSQPacket *packets[], const byte count, size_t *const len, enum SSQCode *const code)
 {
     *len = 0;
 
@@ -176,7 +175,7 @@ const char *ssq_merge_packets(const struct SSQPacket *packets[], const byte coun
     return res;
 }
 
-const char *ssq_query(const struct SSQHandle *handle, const char payload[], const size_t payload_len, size_t *const len, enum SSQCode *const code)
+static const char *ssq_query(const struct SSQHandle *handle, const char payload[], const size_t payload_len, size_t *const len, enum SSQCode *const code)
 {
     SSQ_SET_CODE(SSQ_OK);
 
@@ -288,7 +287,7 @@ const char *ssq_query(const struct SSQHandle *handle, const char payload[], cons
     return res;
 }
 
-char *ssq_extract_str(const char src[], size_t *const len)
+static char *ssq_extract_str(const char src[], size_t *const len)
 {
     *len = strlen(src);
 
@@ -300,7 +299,7 @@ char *ssq_extract_str(const char src[], size_t *const len)
     return res;
 }
 
-bool ssq_payload_is_truncated(const char payload[])
+static inline bool ssq_payload_is_truncated(const char payload[])
 {
     return SSQ_CAST(int32_t, payload) == A2S_PACKET_HEADER_SINGLE;
 }
