@@ -34,51 +34,51 @@
 # include <unistd.h>
 #endif // _WIN32
 
-#define SSQ_PACKET_SIZE          1400
+#define SSQ_PACKET_SIZE             1400
 
-#define A2S_PACKET_HEADER_SINGLE -1
-#define A2S_PACKET_HEADER_MULTI  -2
+#define A2S_PACKET_HEADER_SINGLE    -1
+#define A2S_PACKET_HEADER_MULTI     -2
 
-#define A2S_INFO                 "\xff\xff\xff\xff\x54Source Engine Query"
-#define A2S_INFO_LEN             25
+#define A2S_INFO                    "\xff\xff\xff\xff\x54Source Engine Query"
+#define A2S_INFO_LEN                25
 
-#define A2S_PLAYER               "\xff\xff\xff\xff\x55\xff\xff\xff\xff"
-#define A2S_PLAYER_LEN           9
+#define A2S_PLAYER                  "\xff\xff\xff\xff\x55\xff\xff\xff\xff"
+#define A2S_PLAYER_LEN              9
 
-#define A2S_RULES                "\xff\xff\xff\xff\x56\xff\xff\xff\xff"
-#define A2S_RULES_LEN            9
+#define A2S_RULES                   "\xff\xff\xff\xff\x56\xff\xff\xff\xff"
+#define A2S_RULES_LEN               9
 
-#define S2A_INFO                 0x49
-#define S2A_PLAYER               0x44
-#define S2A_RULES                0x45
-#define S2A_CHALL                0x41
+#define S2A_INFO                    0x49
+#define S2A_PLAYER                  0x44
+#define S2A_RULES                   0x45
+#define S2A_CHALL                   0x41
 
-#define SSQ_CAST(type, ptr)      *((type *) (ptr))
-#define SSQ_EXTRACT(dst)         memcpy(&(dst), resp + pos, sizeof (dst));  pos += sizeof (dst)
-#define SSQ_EXTRACT_STR(dst)     dst = ssq_extract_str(resp + pos, &len); pos += len + 1
+#define SSQ_CAST(type, ptr)         *((type *) (ptr))
+#define SSQ_EXTRACT(dst)            memcpy(&(dst), resp + pos, sizeof (dst));  pos += sizeof (dst)
+#define SSQ_EXTRACT_STR(dst)        dst = ssq_extract_str(resp + pos, &len); pos += len + 1
 
-#define SSQ_SET_CODE(c)          if (code != NULL) *code = c
+#define SSQ_SET_CODE(c)             if (code != NULL) *code = c
 
-struct SSQHandle
+typedef struct SSQHandle
 {
-    struct timeval   timeout_send;
-    struct timeval   timeout_recv;
-    struct addrinfo *addr_list;
-};
+    struct timeval      timeout_send;
+    struct timeval      timeout_recv;
+    struct addrinfo     *addr_list;
+} _SSQHandle;
 
-struct SSQPacket
+typedef struct SSQPacket
 {
-    int32_t  header;  /** The packet's header */
-    int32_t  id;      /** Unique number assigned by server per answer */
-    byte     total;   /** The total number of packets in the response */
-    byte     number;  /** The number of the packet */
-    uint16_t size;    /** The size of the payload */
-    char    *payload; /** The packet's payload */
-};
+    int32_t     header;     /** The packet's header */
+    int32_t     id;         /** Unique number assigned by server per answer */
+    byte        total;      /** The total number of packets in the response */
+    byte        number;     /** The number of the packet */
+    uint16_t    size;       /** The size of the payload */
+    char        *payload;   /** The packet's payload */
+} SSQPacket;
 
-static const struct SSQPacket *ssq_init_packet(const char buffer[], const size_t bytes_received, enum SSQCode *const code)
+static const SSQPacket *ssq_init_packet(const char buffer[], const size_t bytes_received, SSQCode *const code)
 {
-    struct SSQPacket *res = malloc(sizeof (*res));
+    SSQPacket *res = malloc(sizeof (*res));
 
     if (res == NULL)
     {
@@ -133,13 +133,13 @@ static const struct SSQPacket *ssq_init_packet(const char buffer[], const size_t
     return res;
 }
 
-static void ssq_free_packet(const struct SSQPacket *const packet)
+static void ssq_free_packet(const SSQPacket *const packet)
 {
     free(packet->payload);
     free((void *) packet);
 }
 
-static void ssq_free_packets(const struct SSQPacket **packets, const byte count)
+static void ssq_free_packets(const SSQPacket **const packets, const byte count)
 {
     for (byte i = 0; i < count; ++i)
         ssq_free_packet(packets[i]);
@@ -147,7 +147,7 @@ static void ssq_free_packets(const struct SSQPacket **packets, const byte count)
     free((void *) packets);
 }
 
-static const char *ssq_merge_packets(const struct SSQPacket *packets[], const byte count, size_t *const len, enum SSQCode *const code)
+static const char *ssq_merge_packets(const SSQPacket *packets[], const byte count, size_t *const len, SSQCode *const code)
 {
     *len = 0;
 
@@ -175,13 +175,13 @@ static const char *ssq_merge_packets(const struct SSQPacket *packets[], const by
     return res;
 }
 
-static const char *ssq_query(const struct SSQHandle *handle, const char payload[], const size_t payload_len, size_t *const len, enum SSQCode *const code)
+static const char *ssq_query(const SSQHandle *const handle, const char payload[], const size_t payload_len, size_t *const len, SSQCode *const code)
 {
     SSQ_SET_CODE(SSQ_OK);
 
-    const struct SSQHandle *const hdl = handle;
-    const struct addrinfo  *addr      = handle->addr_list;
-    int                     sockfd    = -1;
+    const _SSQHandle *const hdl     = handle;
+    const struct addrinfo   *addr   = hdl->addr_list;
+    int                     sockfd  = -1;
 
     for (; addr != NULL; addr = addr->ai_next)
     {
@@ -191,8 +191,8 @@ static const char *ssq_query(const struct SSQHandle *handle, const char payload[
             break;
     }
 
-    const struct SSQPacket **packets      = NULL; // ordered array of pointers to packets in the response
-    byte                     packet_count = 1;
+    const SSQPacket **packets       = NULL; // ordered array of pointers to packets in the response
+    byte            packet_count    = 1;
 
     if (sockfd == -1)
     {
@@ -213,12 +213,11 @@ static const char *ssq_query(const struct SSQHandle *handle, const char payload[
         {
             for (byte packets_received = 0; packets_received < packet_count; ++packets_received)
             {
-                char          buffer[SSQ_PACKET_SIZE];
-
+                char            buffer[SSQ_PACKET_SIZE];
 #ifdef _WIN32
-                const int bytes_received = recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL);
+                const int       bytes_received = recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL);
 #else
-                const ssize_t bytes_received = recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL);
+                const ssize_t   bytes_received = recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL);
 #endif // _WIN32
 
                 if (bytes_received == -1)
@@ -234,7 +233,7 @@ static const char *ssq_query(const struct SSQHandle *handle, const char payload[
                     break;
                 }
 
-                const struct SSQPacket *const packet = ssq_init_packet(buffer, bytes_received, code);
+                const SSQPacket *const packet = ssq_init_packet(buffer, bytes_received, code);
 
                 if (packet == NULL) // error in the received packet
                 {
@@ -252,8 +251,8 @@ static const char *ssq_query(const struct SSQHandle *handle, const char payload[
                     {
                         // get the number of packets in the response
                         // and allocate some memory for each of them
-                        packet_count = packet->total;
-                        packets      = calloc(packet_count, sizeof (*packets));
+                        packet_count    = packet->total;
+                        packets         = calloc(packet_count, sizeof (*packets));
 
                         if (packets == NULL)
                         {
@@ -291,7 +290,7 @@ static char *ssq_extract_str(const char src[], size_t *const len)
 {
     *len = strlen(src);
 
-    char *res = (char *) calloc(*len, sizeof (*res));
+    char *const res = (char *) calloc(*len, sizeof (*res));
 
     if (res != NULL)
         memcpy(res, src, *len);
@@ -306,7 +305,7 @@ static inline bool ssq_payload_is_truncated(const char payload[])
 
 SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t timeout)
 {
-    struct SSQHandle *res = malloc(sizeof (*res));
+    _SSQHandle *res = malloc(sizeof (*res));
 
     if (res != NULL)
     {
@@ -326,8 +325,8 @@ SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t tim
 
 bool ssq_set_address(SSQHandle *const handle, const char hostname[], const uint16_t port)
 {
-    struct SSQHandle *hdl = handle;
-    char              service[16];
+    _SSQHandle  *hdl = handle;
+    char        service[16];
 
     if (hdl->addr_list != NULL)
         freeaddrinfo(hdl->addr_list);
@@ -342,9 +341,9 @@ bool ssq_set_address(SSQHandle *const handle, const char hostname[], const uint1
     return getaddrinfo(hostname, service, &hints, &hdl->addr_list) == 0;
 }
 
-void ssq_set_timeout(SSQHandle *const handle, const enum SSQTimeout timeout, const time_t value)
+void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const time_t value)
 {
-    struct SSQHandle *const hdl = handle;
+    _SSQHandle *const hdl = handle;
 
     if (timeout == SSQ_TIMEOUT_BOTH)
     {
@@ -361,31 +360,32 @@ void ssq_set_timeout(SSQHandle *const handle, const enum SSQTimeout timeout, con
 
 void ssq_free(const SSQHandle *const handle)
 {
-    const struct SSQHandle *const hdl = handle;
+    const _SSQHandle *const hdl = handle;
     freeaddrinfo(hdl->addr_list);
     free((void *) hdl);
 }
 
-struct A2SInfo *ssq_info(const SSQHandle *const handle, enum SSQCode *const code)
+A2SInfo *ssq_info(const SSQHandle *const handle, SSQCode *const code)
 {
-    char        req[A2S_INFO_LEN + 4] = A2S_INFO; // 4 additional bytes if a challenge number must be sent back
+    char        req[A2S_INFO_LEN + 4]   = A2S_INFO; // 4 additional bytes if a challenge number must be sent back
     size_t      resp_len;
-    const char *resp                  = ssq_query(handle, req, A2S_INFO_LEN, &resp_len, code);
+    const char  *resp                   = ssq_query(handle, req, A2S_INFO_LEN, &resp_len, code);
 
     if (resp == NULL)
         return NULL;
 
     while (SSQ_CAST(byte, resp) == S2A_CHALL)
     {
-        // copy the challenge number
-        memcpy(req + A2S_INFO_LEN, resp + 1, 4);
-
+        memcpy(req + A2S_INFO_LEN, resp + 1, 4); // copy the challenge number
         free((void *) resp);
         resp = ssq_query(handle, req, A2S_INFO_LEN + 4, &resp_len, code);
+
+        if (resp == NULL)
+            return NULL;
     }
 
-    struct A2SInfo *res = NULL;
-    size_t          pos = 0;
+    A2SInfo *res    = NULL;
+    size_t  pos     = 0;
 
     if (ssq_payload_is_truncated(resp))
         pos += 4;
@@ -396,7 +396,7 @@ struct A2SInfo *ssq_info(const SSQHandle *const handle, enum SSQCode *const code
 
         if (res != NULL)
         {
-            size_t len; // temporary variable to store extracted string lengths (used by SSQ_EXTRACT_STR macro)
+            size_t len; // temporary variable to store extracted string lengths
 
             SSQ_EXTRACT(res->protocol);
             SSQ_EXTRACT_STR(res->name);
@@ -496,7 +496,7 @@ struct A2SInfo *ssq_info(const SSQHandle *const handle, enum SSQCode *const code
     return res;
 }
 
-void ssq_free_info(const struct A2SInfo *const info)
+void ssq_free_info(const A2SInfo *const info)
 {
     free(info->name);
     free(info->map);
@@ -513,20 +513,18 @@ void ssq_free_info(const struct A2SInfo *const info)
     free((void *) info);
 }
 
-struct A2SPlayer *ssq_player(const SSQHandle *const handle, byte *const count, enum SSQCode *const code)
+A2SPlayer *ssq_player(const SSQHandle *const handle, byte *const count, SSQCode *const code)
 {
     char        req[A2S_PLAYER_LEN] = A2S_PLAYER;
     size_t      resp_len;
-    const char *resp                = ssq_query(handle, req, A2S_PLAYER_LEN, &resp_len, code);
+    const char  *resp               = ssq_query(handle, req, A2S_PLAYER_LEN, &resp_len, code);
 
     if (resp == NULL)
         return NULL;
 
     while (SSQ_CAST(byte, resp) == S2A_CHALL)
     {
-        // copy the challenge number
-        memcpy(req + A2S_PLAYER_LEN - 4, resp + 1, 4);
-
+        memcpy(req + A2S_PLAYER_LEN - 4, resp + 1, 4); // copy the challenge number
         free((void *) resp);
         resp = ssq_query(handle, req, A2S_PLAYER_LEN, &resp_len, code);
 
@@ -534,8 +532,8 @@ struct A2SPlayer *ssq_player(const SSQHandle *const handle, byte *const count, e
             return NULL;
     }
 
-    struct A2SPlayer *res = NULL;
-    size_t            pos = 0;
+    A2SPlayer   *res    = NULL;
+    size_t      pos     = 0;
 
     if (SSQ_CAST(byte, &resp[pos++]) == S2A_PLAYER)
     {
@@ -570,7 +568,7 @@ struct A2SPlayer *ssq_player(const SSQHandle *const handle, byte *const count, e
     return res;
 }
 
-void ssq_free_players(const struct A2SPlayer players[], const byte count)
+void ssq_free_players(const A2SPlayer players[], const byte count)
 {
     for (byte i = 0; i < count; ++i)
         free(players[i].name);
@@ -578,20 +576,18 @@ void ssq_free_players(const struct A2SPlayer players[], const byte count)
     free((void *) players);
 }
 
-struct A2SRules *ssq_rules(const SSQHandle *const handle, uint16_t *const count, enum SSQCode *const code)
+A2SRules *ssq_rules(const SSQHandle *const handle, uint16_t *const count, SSQCode *const code)
 {
-    char        req[A2S_RULES_LEN] = A2S_RULES;
+    char        req[A2S_RULES_LEN]  = A2S_RULES;
     size_t      resp_len;
-    const char *resp               = ssq_query(handle, req, A2S_RULES_LEN, &resp_len, code);
+    const char  *resp               = ssq_query(handle, req, A2S_RULES_LEN, &resp_len, code);
 
     if (resp == NULL)
         return NULL;
 
     while (SSQ_CAST(byte, resp) == S2A_CHALL)
     {
-        // copy the challenge number
-        memcpy(req + A2S_RULES_LEN - 4, resp + 1, 4);
-
+        memcpy(req + A2S_RULES_LEN - 4, resp + 1, 4); // copy the challenge number
         free((void *) resp);
         resp = ssq_query(handle, req, A2S_RULES_LEN, &resp_len, code);
 
@@ -599,8 +595,8 @@ struct A2SRules *ssq_rules(const SSQHandle *const handle, uint16_t *const count,
             return NULL;
     }
 
-    struct A2SRules *res = NULL;
-    size_t           pos = 0;
+    A2SRules    *res    = NULL;
+    size_t      pos     = 0;
 
     if (ssq_payload_is_truncated(resp))
         pos += 4;
@@ -636,7 +632,7 @@ struct A2SRules *ssq_rules(const SSQHandle *const handle, uint16_t *const count,
     return res;
 }
 
-struct A2SRules *ssq_get_rule(const char name[], struct A2SRules rules[], const uint16_t count)
+A2SRules *ssq_get_rule(const char name[], A2SRules rules[], const uint16_t count)
 {
     for (uint16_t i = 0; i < count; ++i)
     {
@@ -647,7 +643,7 @@ struct A2SRules *ssq_get_rule(const char name[], struct A2SRules rules[], const 
     return NULL;
 }
 
-void ssq_free_rules(const struct A2SRules rules[], const uint16_t count)
+void ssq_free_rules(const A2SRules rules[], const uint16_t count)
 {
     for (byte i = 0; i < count; ++i)
     {

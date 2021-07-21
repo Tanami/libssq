@@ -40,7 +40,7 @@ extern "C"
 {
 #endif // __cplusplus
 
-enum SSQCode
+typedef enum SSQCode
 {
     SSQ_OK                      = 0,
     SSQ_SOCKET_CREATION_FAIL    = 1,
@@ -49,80 +49,80 @@ enum SSQCode
     SSQ_SOCKET_CONFIG_FAIL      = 4,
     SSQ_MALFORMED_RESPONSE      = 5,
     SSQ_ALLOCATION_FAIL         = 6
-};
+} SSQCode;
 
-enum SSQTimeout
+typedef enum SSQTimeout
 {
     SSQ_TIMEOUT_RECV = 0,
     SSQ_TIMEOUT_SEND = 1,
     SSQ_TIMEOUT_BOTH = 2
-};
+} SSQTimeout;
 
-enum A2SServerType
+typedef enum A2SServerType
 {
-    SERVER_TYPE_DEDICATED      = 'd',
-    SERVER_TYPE_NON_DEDICATED  = 'l',
-    SERVER_TYPE_SOURCETV_RELAY = 'p'
-};
+    SERVER_TYPE_DEDICATED       = 'd',
+    SERVER_TYPE_NON_DEDICATED   = 'l',
+    SERVER_TYPE_SOURCETV_RELAY  = 'p'
+} A2SServerType;
 
-enum A2SEnvironment
+typedef enum A2SEnvironment
 {
     ENVIRONMENT_LINUX   = 'l',
     ENVIRONMENT_WINDOWS = 'w',
     ENVIRONMENT_MAC     = 'm'
-};
+} A2SEnvironment;
 
-struct A2SInfo
+typedef struct A2SInfo
 {
-    byte                protocol;      /** Protocol version used by the server */
-    char               *name;          /** Name of the server */
-    char               *map;           /** Map the server has currently loaded */
-    char               *folder;        /** Name of the folder containing the game files */
-    char               *game;          /** Full name of the game */
-    uint16_t            id;            /** Steam Application ID of game */
-    byte                players;       /** Number of players on the server */
-    byte                max_players;   /** Maximum number of players the server reports it can hold */
-    byte                bots;          /** Number of bots on the server */
-    enum A2SServerType  server_type;   /** The type of server */
-    enum A2SEnvironment environment;   /** The operating system of the server */
-    bool                visibility;    /** Whether the server requires a password */
-    bool                vac;           /** Whether the server uses VAC */
-    char               *version;       /** Version of the game installed on the server */
-    byte                edf;           /** Extra Data Flags */
-    uint16_t            port;          /** The server's game port number */
-    uint64_t            steamid;       /** Server's SteamID */
-    uint16_t            port_sourcetv; /** Spectator port number for SourceTV */
-    char               *name_sourcetv; /** Name of the spectator server for SourceTV */
-    char               *keywords;      /** Tags that describe the game according to the server */
-    uint64_t            gameid;        /** The server's 64-bit GameID */
-};
+    byte            protocol;       /** Protocol version used by the server */
+    char            *name;          /** Name of the server */
+    char            *map;           /** Map the server has currently loaded */
+    char            *folder;        /** Name of the folder containing the game files */
+    char            *game;          /** Full name of the game */
+    uint16_t        id;             /** Steam Application ID of game */
+    byte            players;        /** Number of players on the server */
+    byte            max_players;    /** Maximum number of players the server reports it can hold */
+    byte            bots;           /** Number of bots on the server */
+    A2SServerType   server_type;    /** The type of server */
+    A2SEnvironment  environment;    /** The operating system of the server */
+    bool            visibility;     /** Whether the server requires a password */
+    bool            vac;            /** Whether the server uses VAC */
+    char            *version;       /** Version of the game installed on the server */
+    byte            edf;            /** Extra Data Flags */
+    uint16_t        port;           /** The server's game port number */
+    uint64_t        steamid;        /** Server's SteamID */
+    uint16_t        port_sourcetv;  /** Spectator port number for SourceTV */
+    char            *name_sourcetv; /** Name of the spectator server for SourceTV */
+    char            *keywords;      /** Tags that describe the game according to the server */
+    uint64_t        gameid;         /** The server's 64-bit GameID */
+} A2SInfo;
 
-struct A2SPlayer
+typedef struct A2SPlayer
 {
-    char   *name;     /** Name of the player */
-    int32_t score;    /** Player's score (usually "frags" or "kills") */
-    float   duration; /** Time (in seconds) player has been connected to the server */
-};
+    char    *name;      /** Name of the player */
+    int32_t score;      /** Player's score (usually "frags" or "kills") */
+    float   duration;   /** Time (in seconds) player has been connected to the server */
+} A2SPlayer;
 
-struct A2SRules
+typedef struct A2SRules
 {
-    char *name;  /** Name of the rule */
-    char *value; /** Value of the rule */
-};
+    char *name;     /** Name of the rule */
+    char *value;    /** Value of the rule */
+} A2SRules;
 
 typedef void SSQHandle;
 
-SSQHandle        *ssq_init(const char hostname[], const uint16_t port, const time_t timeout);                  /** Initializes an SSQ handle */
-bool              ssq_set_address(SSQHandle *const handle, const char hostname[], const uint16_t port);        /** Resets the target address of an SSQ handle */
-void              ssq_set_timeout(SSQHandle *const handle, const enum SSQTimeout timeout, const time_t value); /** Sets the sendto/recvfrom timeout of an SSQ handle */
-void              ssq_free(const SSQHandle *const handle);                                                     /** Frees resources allocated by an SSQ handle */
-struct A2SInfo   *ssq_info(const SSQHandle *const handle, enum SSQCode *const code);                           /** Sends an A2S_INFO query using the provided SSQ handle */
-void              ssq_free_info(const struct A2SInfo *const info);                                             /** Frees resources allocated by an A2S_INFO struct */
-struct A2SPlayer *ssq_player(const SSQHandle *const handle, byte *const count, enum SSQCode *const code);      /** Sends an A2S_PLAYER query using the provided SSQ handle */
-void              ssq_free_players(const struct A2SPlayer players[], const byte count);                        /** Frees an A2S_PLAYER array */
-struct A2SRules  *ssq_rules(const SSQHandle *const handle, uint16_t *const count, enum SSQCode *const code);   /** Sends an A2S_RULES query using the provided SSQ handle */
-struct A2SRules  *ssq_get_rule(const char name[], struct A2SRules rules[], const uint16_t count);              /** Finds a rule by its name among an array of A2S_RULES */
-void              ssq_free_rules(const struct A2SRules rules[], const uint16_t count);                         /** Frees an A2S_RULES array */
+SSQHandle   *ssq_init(const char hostname[], const uint16_t port, const time_t timeout);            /** Initializes an SSQ handle */
+bool        ssq_set_address(SSQHandle *const handle, const char hostname[], const uint16_t port);   /** Resets the target address of an SSQ handle */
+void        ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const time_t value); /** Sets the sendto/recvfrom timeout of an SSQ handle */
+void        ssq_free(const SSQHandle *const handle);                                                /** Frees resources allocated by an SSQ handle */
+A2SInfo     *ssq_info(const SSQHandle *const handle, SSQCode *const code);                          /** Sends an A2S_INFO query using the provided SSQ handle */
+void        ssq_free_info(const A2SInfo *const info);                                               /** Frees resources allocated by an A2S_INFO struct */
+A2SPlayer   *ssq_player(const SSQHandle *const handle, byte *const count, SSQCode *const code);     /** Sends an A2S_PLAYER query using the provided SSQ handle */
+void        ssq_free_players(const A2SPlayer players[], const byte count);                          /** Frees an A2S_PLAYER array */
+A2SRules    *ssq_rules(const SSQHandle *const handle, uint16_t *const count, SSQCode *const code);  /** Sends an A2S_RULES query using the provided SSQ handle */
+A2SRules    *ssq_get_rule(const char name[], A2SRules rules[], const uint16_t count);               /** Finds a rule by its name among an array of A2S_RULES */
+void        ssq_free_rules(const A2SRules rules[], const uint16_t count);                           /** Frees an A2S_RULES array */
 
 #ifdef __cplusplus
 }
