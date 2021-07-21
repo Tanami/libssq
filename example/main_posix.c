@@ -8,10 +8,10 @@ int main(int argc, const char *argv[])
     if (argc != 3)
         errx(EXIT_FAILURE, "usage: %s hostname port", argv[0]);
 
-    const char     *hostname = argv[1];
-    const uint16_t  port     = atoi(argv[2]);
-    SSQHandle      *ssq;
-    enum SSQCode    code;
+    const char      *hostname   = argv[1];
+    const uint16_t  port        = atoi(argv[2]);
+    const SSQHandle *ssq;
+    SSQCode         code;
 
     if ((ssq = ssq_init(hostname, port, 5000)) == NULL)
         err(EXIT_FAILURE, "ssq_set_address");
@@ -21,7 +21,7 @@ int main(int argc, const char *argv[])
      * A2S_INFO
      */
 
-    struct A2SInfo *info = ssq_info(ssq, &code);
+    A2SInfo *info = ssq_info(ssq, &code);
 
     if (info == NULL)
         err(EXIT_FAILURE, "ssq_info: failed with code %d", code);
@@ -74,8 +74,8 @@ int main(int argc, const char *argv[])
      * A2S_PLAYER
      */
 
-    byte player_count;
-    struct A2SPlayer *players = ssq_player(ssq, &player_count, &code);
+    byte        player_count;
+    A2SPlayer   *players = ssq_player(ssq, &player_count, &code);
 
     if (code != SSQ_OK)
         errx(EXIT_FAILURE, "ssq_player: failed with code %d", code);
@@ -96,8 +96,8 @@ int main(int argc, const char *argv[])
      * A2S_RULES
      */
 
-    uint16_t rules_count;
-    struct A2SRules *rules = ssq_rules(ssq, &rules_count, &code);
+    uint16_t    rules_count;
+    A2SRules    *rules = ssq_rules(ssq, &rules_count, &code);
 
     if (code != SSQ_OK)
         errx(EXIT_FAILURE, "ssq_rules: failed with code %d", code);
@@ -105,9 +105,7 @@ int main(int argc, const char *argv[])
     printf("----- RULES BEGIN -----\n");
 
     for (uint16_t i = 0; i < rules_count; ++i)
-    {
         printf("%s = %s\n", rules[i].name, rules[i].value);
-    }
 
     printf("------ RULES END ------\n");
 
