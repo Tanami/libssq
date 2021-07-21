@@ -15,8 +15,8 @@ void ssq_print_info(const A2SInfo *const info)
     printf("ID.............: %hu\n",info->id);
     printf("Players........: %hu/%hu (%hu bots)\n", info->players, info->max_players, info->bots);
     printf("Server type....: %s\n",
-        ((info->server_type == SERVER_TYPE_DEDICATED)      ? "dedicated" :
-        ((info->server_type == SERVER_TYPE_SOURCETV_RELAY) ? "SourceTV relay (proxy)" : "non dedicated"))
+        ((info->server_type == SERVER_TYPE_DEDICATED)       ? "dedicated" :
+        ((info->server_type == SERVER_TYPE_SOURCETV_RELAY)  ? "SourceTV relay (proxy)" : "non dedicated"))
     );
     printf("Environment....: %s\n",
         ((info->environment == ENVIRONMENT_WINDOWS) ? "windows" :
