@@ -95,5 +95,4 @@ tags
 
 # End of https://www.toptal.com/developers/gitignore/api/c,cmake,vim
 
-.vscode/
 build/

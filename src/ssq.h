@@ -53,9 +53,8 @@ typedef enum SSQCode
 
 typedef enum SSQTimeout
 {
-    SSQ_TIMEOUT_RECV = 0,
-    SSQ_TIMEOUT_SEND = 1,
-    SSQ_TIMEOUT_BOTH = 2
+    SSQ_TIMEOUT_RECV = 0x1,
+    SSQ_TIMEOUT_SEND = 0x2
 } SSQTimeout;
 
 typedef enum A2SServerType

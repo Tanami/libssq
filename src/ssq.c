@@ -76,8 +76,10 @@ typedef struct SSQPacket
     char        *payload;   /** The packet's payload */
 } SSQPacket;
 
-static const SSQPacket *ssq_init_packet(const char buffer[], const size_t bytes_received, SSQCode *const code)
+static SSQPacket *ssq_init_packet(const char buffer[], const size_t bytes_received, SSQCode *const code)
 {
+    SSQ_SET_CODE(SSQ_OK);
+
     SSQPacket *res = malloc(sizeof (*res));
 
     if (res == NULL)
@@ -149,6 +151,8 @@ static void ssq_free_packets(const SSQPacket **const packets, const byte count)
 
 static const char *ssq_merge_packets(const SSQPacket *packets[], const byte count, size_t *const len, SSQCode *const code)
 {
+    SSQ_SET_CODE(SSQ_OK);
+
     *len = 0;
 
     // compute total length
@@ -316,7 +320,7 @@ SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t tim
         }
         else
         {
-            ssq_set_timeout(res, SSQ_TIMEOUT_BOTH, timeout);
+            ssq_set_timeout(res, SSQ_TIMEOUT_RECV | SSQ_TIMEOUT_SEND, timeout);
         }
     }
 
@@ -345,16 +349,16 @@ void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const ti
 {
     _SSQHandle *const hdl = handle;
 
-    if (timeout == SSQ_TIMEOUT_BOTH)
+    if (timeout & SSQ_TIMEOUT_RECV)
     {
-        ssq_set_timeout(handle, SSQ_TIMEOUT_RECV, value);
-        ssq_set_timeout(handle, SSQ_TIMEOUT_SEND, value);
+        hdl->timeout_recv.tv_sec = value / 1000;
+        hdl->timeout_recv.tv_usec = value % 1000 * 1000;
     }
-    else
+
+    if (timeout & SSQ_TIMEOUT_SEND)
     {
-        struct timeval *const tv = (timeout == SSQ_TIMEOUT_RECV) ? &hdl->timeout_recv : &hdl->timeout_send;
-        tv->tv_sec  = value / 1000;
-        tv->tv_usec = value % 1000 * 1000;
+        hdl->timeout_send.tv_sec = value / 1000;
+        hdl->timeout_send.tv_usec = value % 1000 * 1000;
     }
 }
 
@@ -367,6 +371,8 @@ void ssq_free(const SSQHandle *const handle)
 
 A2SInfo *ssq_info(const SSQHandle *const handle, SSQCode *const code)
 {
+    SSQ_SET_CODE(SSQ_OK);
+
     char        req[A2S_INFO_LEN + 4]   = A2S_INFO; // 4 additional bytes if a challenge number must be sent back
     size_t      resp_len;
     const char  *resp                   = ssq_query(handle, req, A2S_INFO_LEN, &resp_len, code);
@@ -515,6 +521,8 @@ void ssq_free_info(const A2SInfo *const info)
 
 A2SPlayer *ssq_player(const SSQHandle *const handle, byte *const count, SSQCode *const code)
 {
+    SSQ_SET_CODE(SSQ_OK);
+
     char        req[A2S_PLAYER_LEN] = A2S_PLAYER;
     size_t      resp_len;
     const char  *resp               = ssq_query(handle, req, A2S_PLAYER_LEN, &resp_len, code);
@@ -578,6 +586,8 @@ void ssq_free_players(const A2SPlayer players[], const byte count)
 
 A2SRules *ssq_rules(const SSQHandle *const handle, uint16_t *const count, SSQCode *const code)
 {
+    SSQ_SET_CODE(SSQ_OK);
+
     char        req[A2S_RULES_LEN]  = A2S_RULES;
     size_t      resp_len;
     const char  *resp               = ssq_query(handle, req, A2S_RULES_LEN, &resp_len, code);
