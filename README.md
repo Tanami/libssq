@@ -45,7 +45,7 @@ ssq_set_timeout(ssq, SSQ_TIMEOUT_RECV, 5000);
 
 // or ...
 
-ssq_set_timeout(ssq, SSQ_TIMEOUT_BOTH, 5000);
+ssq_set_timeout(ssq, SSQ_TIMEOUT_SEND | SSQ_TIMEOUT_RECV, 5000);
 ```
 
 Be sure to check out this repo's [wiki](https://github.com/BinaryAlien/libssq/wiki) for documentation about each function as well as the `example` folder which contains an example program which exploits each of the three queries.
