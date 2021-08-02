@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-#include "ssq.h"
+#include <ssq.h>
 
 #include <stdio.h>
 #include <stdlib.h>
