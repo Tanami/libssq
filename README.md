@@ -22,9 +22,14 @@ Before we can issue any query, we must initialize an `SSQHandle`. This opaque st
 ```c
 const time_t timeout = 5000; // ms
 
+SSQCode code; // return code
+
 // initializes an SSQ handle for the target host example.com on
 // port number 27015 with a sendto and recvfrom timeout of 5 sec
-SSQHandle *ssq = ssq_init("example.com", 27015, timeout);
+SSQHandle *ssq = ssq_init("example.com", 27015, timeout, &code);
+
+if (code != SSQ_OK)
+    // error handling
 
 // ...
 

@@ -79,8 +79,8 @@ int main(int argc, const char *argv[])
     const SSQHandle *ssq;
     SSQCode         code;
 
-    if ((ssq = ssq_init(hostname, port, 5000)) == NULL)
-        err(EXIT_FAILURE, "ssq_set_address");
+    if ((ssq = ssq_init(hostname, port, 5000, &code)) == NULL)
+        err(EXIT_FAILURE, "ssq_init: failed with code %d", code);
 
 
     /**

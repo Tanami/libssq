@@ -29,8 +29,10 @@
 
 #ifdef _WIN32
 # include <winsock2.h>
+# include <ws2tcpip.h>
 #else
 # include <netdb.h>
+# include <sys/types.h>
 # include <unistd.h>
 #endif // _WIN32
 
@@ -312,8 +314,10 @@ static inline bool ssq_payload_is_truncated(const char payload[])
     return SSQ_CAST(int32_t, payload) == A2S_PACKET_HEADER_SINGLE;
 }
 
-SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t timeout)
+SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t timeout, SSQCode *const code)
 {
+    SSQ_SET_CODE(SSQ_OK);
+
     _SSQHandle *res = malloc(sizeof (*res));
 
     if (res != NULL)
@@ -322,6 +326,8 @@ SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t tim
 
         if (!ssq_set_address(res, hostname, port)) // invalid address
         {
+            SSQ_SET_CODE(SSQ_INVALID_ADDRESS);
+
             free(res);
             res = NULL;
         }
@@ -329,6 +335,10 @@ SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t tim
         {
             ssq_set_timeout(res, SSQ_TIMEOUT_RECV | SSQ_TIMEOUT_SEND, timeout);
         }
+    }
+    else
+    {
+        SSQ_SET_CODE(SSQ_ALLOCATION_FAIL);
     }
 
     return res;
