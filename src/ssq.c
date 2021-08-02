@@ -313,6 +313,8 @@ SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t tim
 
     if (res != NULL)
     {
+        memset(res, 0, sizeof (*res));
+
         if (!ssq_set_address(res, hostname, port)) // invalid address
         {
             free(res);
@@ -333,7 +335,10 @@ bool ssq_set_address(SSQHandle *const handle, const char hostname[], const uint1
     char        service[16];
 
     if (hdl->addr_list != NULL)
+    {
         freeaddrinfo(hdl->addr_list);
+        hdl->addr_list = NULL;
+    }
 
     sprintf(service, "%hu", port);
 
