@@ -294,7 +294,7 @@ static char *ssq_extract_str(const char src[], size_t *const len)
 {
     *len = strlen(src);
 
-    char *const res = (char *) calloc(*len, sizeof (*res));
+    char *const res = (char *) calloc(*len + 1, sizeof (*res));
 
     if (res != NULL)
         memcpy(res, src, *len);
