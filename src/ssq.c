@@ -204,8 +204,13 @@ static const char *ssq_query(const SSQHandle *const handle, const char payload[]
     }
     else
     {
+#ifdef _WIN32
+        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *) &hdl->timeout_recv, sizeof (hdl->timeout_recv)) == -1 ||
+            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char *) &hdl->timeout_send, sizeof (hdl->timeout_send)) == -1)
+#else
         if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &hdl->timeout_recv, sizeof (hdl->timeout_recv)) == -1 ||
             setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &hdl->timeout_send, sizeof (hdl->timeout_send)) == -1)
+#endif // _WIN32
         {
             SSQ_SET_CODE(SSQ_SOCKET_CONFIG_FAIL);
         }
