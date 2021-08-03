@@ -207,8 +207,11 @@ static const char *ssq_query(const SSQHandle *const handle, const char payload[]
     else
     {
 #ifdef _WIN32
-        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *) &hdl->timeout_recv, sizeof (hdl->timeout_recv)) == -1 ||
-            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char *) &hdl->timeout_send, sizeof (hdl->timeout_send)) == -1)
+        DWORD timeout_recv = hdl->timeout_recv.tv_sec * 1000 + hdl->timeout_recv.tv_usec / 1000;
+        DWORD timeout_send = hdl->timeout_send.tv_sec * 1000 + hdl->timeout_send.tv_usec / 1000;
+
+        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout_recv, sizeof (timeout_recv)) == -1 ||
+            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char *) &timeout_send, sizeof (timeout_send)) == -1)
 #else
         if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &hdl->timeout_recv, sizeof (hdl->timeout_recv)) == -1 ||
             setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &hdl->timeout_send, sizeof (hdl->timeout_send)) == -1)
