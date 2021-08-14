@@ -28,6 +28,12 @@
 #include <stdint.h>
 #include <time.h>
 
+#ifdef _WIN32
+# include <WinSock2.h>
+#else
+# include <sys/types.h>
+#endif // _WIN32
+
 typedef uint8_t byte;
 
 #ifdef __cplusplus
@@ -105,16 +111,29 @@ typedef struct A2SRules
     char *value;    /** Value of the rule */
 } A2SRules;
 
-typedef void SSQHandle;
+typedef struct SSQHandle
+{
+    struct timeval      timeout_send;
+    struct timeval      timeout_recv;
+    struct addrinfo     *addr_list;
+} SSQHandle;
 
+#ifdef _WIN32
+SSQHandle   *ssq_init(const char hostname[], const uint16_t port, const long timeout, SSQCode *const code);     /** Initializes an SSQ handle */
+void        ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const long value);               /** Sets the sendto/recvfrom timeout of an SSQ handle */
+#else
 SSQHandle   *ssq_init(const char hostname[], const uint16_t port, const time_t timeout, SSQCode *const code);   /** Initializes an SSQ handle */
-bool        ssq_set_address(SSQHandle *const handle, const char hostname[], const uint16_t port);               /** Resets the target address of an SSQ handle */
 void        ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const time_t value);             /** Sets the sendto/recvfrom timeout of an SSQ handle */
+#endif // _WIN32
+bool        ssq_set_address(SSQHandle *const handle, const char hostname[], const uint16_t port);               /** Resets the target address of an SSQ handle */
 void        ssq_free(const SSQHandle *const handle);                                                            /** Frees resources allocated by an SSQ handle */
+
 A2SInfo     *ssq_info(const SSQHandle *const handle, SSQCode *const code);                                      /** Sends an A2S_INFO query using the provided SSQ handle */
 void        ssq_free_info(const A2SInfo *const info);                                                           /** Frees resources allocated by an A2S_INFO struct */
+
 A2SPlayer   *ssq_player(const SSQHandle *const handle, byte *const count, SSQCode *const code);                 /** Sends an A2S_PLAYER query using the provided SSQ handle */
 void        ssq_free_players(const A2SPlayer players[], const byte count);                                      /** Frees an A2S_PLAYER array */
+
 A2SRules    *ssq_rules(const SSQHandle *const handle, uint16_t *const count, SSQCode *const code);              /** Sends an A2S_RULES query using the provided SSQ handle */
 A2SRules    *ssq_get_rule(const char name[], A2SRules rules[], const uint16_t count);                           /** Finds a rule by its name among an array of A2S_RULES */
 void        ssq_free_rules(const A2SRules rules[], const uint16_t count);                                       /** Frees an A2S_RULES array */

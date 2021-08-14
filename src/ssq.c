@@ -28,12 +28,16 @@
 #include <string.h>
 
 #ifdef _WIN32
-# include <winsock2.h>
-# include <ws2tcpip.h>
+# include <WS2tcpip.h>
 #else
 # include <netdb.h>
-# include <sys/types.h>
 # include <unistd.h>
+
+# define INVALID_SOCKET -1
+# define SOCKET_ERROR   -1
+
+typedef int SOCKET;
+
 #endif // _WIN32
 
 #define SSQ_PACKET_SIZE             1400
@@ -61,13 +65,6 @@
 
 #define SSQ_SET_CODE(c)             if (code != NULL) *code = c
 
-typedef struct SSQHandle
-{
-    struct timeval      timeout_send;
-    struct timeval      timeout_recv;
-    struct addrinfo     *addr_list;
-} _SSQHandle;
-
 typedef struct SSQPacket
 {
     int32_t     header;     /** The packet's header */
@@ -78,7 +75,7 @@ typedef struct SSQPacket
     char        *payload;   /** The packet's payload */
 } SSQPacket;
 
-static SSQPacket *ssq_init_packet(const char buffer[], const size_t bytes_received, SSQCode *const code)
+static SSQPacket *ssq_init_packet(const char buffer[], const uint16_t bytes_received, SSQCode *const code)
 {
     SSQ_SET_CODE(SSQ_OK);
 
@@ -181,45 +178,52 @@ static const char *ssq_merge_packets(const SSQPacket *packets[], const byte coun
     return res;
 }
 
+#ifdef _WIN32
+static const char *ssq_query(const SSQHandle *const handle, const char payload[], const int payload_len, size_t *const len, SSQCode *const code)
+#else
 static const char *ssq_query(const SSQHandle *const handle, const char payload[], const size_t payload_len, size_t *const len, SSQCode *const code)
+#endif // _WIN32
 {
     SSQ_SET_CODE(SSQ_OK);
 
-    const _SSQHandle *const hdl     = handle;
-    const struct addrinfo   *addr   = hdl->addr_list;
-    int                     sockfd  = -1;
+    const struct addrinfo   *addr   = handle->addr_list;
+    SOCKET                  sockfd  = SOCKET_ERROR;
 
     for (; addr != NULL; addr = addr->ai_next)
     {
         sockfd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 
-        if (sockfd != -1)
+        if (sockfd != INVALID_SOCKET)
             break;
     }
 
     const SSQPacket **packets       = NULL; // ordered array of pointers to packets in the response
     byte            packet_count    = 1;
 
-    if (sockfd == -1)
+    if (sockfd == INVALID_SOCKET)
     {
         SSQ_SET_CODE(SSQ_SOCKET_CREATION_FAIL);
     }
     else
     {
 #ifdef _WIN32
-        DWORD timeout_recv = hdl->timeout_recv.tv_sec * 1000 + hdl->timeout_recv.tv_usec / 1000;
-        DWORD timeout_send = hdl->timeout_send.tv_sec * 1000 + hdl->timeout_send.tv_usec / 1000;
+        DWORD timeout_recv = handle->timeout_recv.tv_sec * 1000 + handle->timeout_recv.tv_usec / 1000;
+        DWORD timeout_send = handle->timeout_send.tv_sec * 1000 + handle->timeout_send.tv_usec / 1000;
 
-        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout_recv, sizeof (timeout_recv)) == -1 ||
-            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char *) &timeout_send, sizeof (timeout_send)) == -1)
+        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout_recv, sizeof (timeout_recv)) == SOCKET_ERROR ||
+            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char *) &timeout_send, sizeof (timeout_send)) == SOCKET_ERROR)
 #else
-        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &hdl->timeout_recv, sizeof (hdl->timeout_recv)) == -1 ||
-            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &hdl->timeout_send, sizeof (hdl->timeout_send)) == -1)
+        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &hdl->timeout_recv, sizeof (hdl->timeout_recv)) == SOCKET_ERROR ||
+            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &hdl->timeout_send, sizeof (hdl->timeout_send)) == SOCKET_ERROR)
 #endif // _WIN32
         {
             SSQ_SET_CODE(SSQ_SOCKET_CONFIG_FAIL);
         }
-        else if (sendto(sockfd, payload, payload_len, 0, addr->ai_addr, addr->ai_addrlen) == -1)
+#ifdef _WIN32
+        else if (sendto(sockfd, payload, payload_len, 0, addr->ai_addr, (int) addr->ai_addrlen) == SOCKET_ERROR)
+#else
+        else if (sendto(sockfd, payload, payload_len, 0, addr->ai_addr, addr->ai_addrlen) == SOCKET_ERROR)
+#endif // _WIN32
         {
             SSQ_SET_CODE(SSQ_SOCKET_SENDTO_FAIL);
         }
@@ -234,7 +238,7 @@ static const char *ssq_query(const SSQHandle *const handle, const char payload[]
                 const ssize_t   bytes_received = recvfrom(sockfd, buffer, SSQ_PACKET_SIZE, 0, NULL, NULL);
 #endif // _WIN32
 
-                if (bytes_received == -1)
+                if (bytes_received == SOCKET_ERROR)
                 {
                     SSQ_SET_CODE(SSQ_SOCKET_RECVFROM_FAIL);
 
@@ -317,11 +321,15 @@ static inline bool ssq_payload_is_truncated(const char payload[])
     return SSQ_CAST(int32_t, payload) == A2S_PACKET_HEADER_SINGLE;
 }
 
+#ifdef _WIN32
+SSQHandle *ssq_init(const char hostname[], const uint16_t port, const long timeout, SSQCode *const code)
+#else
 SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t timeout, SSQCode *const code)
+#endif // _WIN32
 {
     SSQ_SET_CODE(SSQ_OK);
 
-    _SSQHandle *res = malloc(sizeof (*res));
+    SSQHandle *res = malloc(sizeof (*res));
 
     if (res != NULL)
     {
@@ -349,47 +357,51 @@ SSQHandle *ssq_init(const char hostname[], const uint16_t port, const time_t tim
 
 bool ssq_set_address(SSQHandle *const handle, const char hostname[], const uint16_t port)
 {
-    _SSQHandle  *hdl = handle;
-    char        service[16];
+    char service[16];
 
-    if (hdl->addr_list != NULL)
+    if (handle->addr_list != NULL)
     {
-        freeaddrinfo(hdl->addr_list);
-        hdl->addr_list = NULL;
+        freeaddrinfo(handle->addr_list);
+        handle->addr_list = NULL;
     }
 
+#ifdef _WIN32
+    sprintf_s(service, 16, "%hu", port);
+#else
     sprintf(service, "%hu", port);
+#endif // _WIN32
 
     struct addrinfo hints;
     memset(&hints, 0, sizeof (hints));
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = IPPROTO_UDP;
 
-    return getaddrinfo(hostname, service, &hints, &hdl->addr_list) == 0;
+    return getaddrinfo(hostname, service, &hints, &handle->addr_list) == 0;
 }
 
+#ifdef _WIN32
+void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const long value)
+#else
 void ssq_set_timeout(SSQHandle *const handle, const SSQTimeout timeout, const time_t value)
+#endif // _WIN32
 {
-    _SSQHandle *const hdl = handle;
-
     if (timeout & SSQ_TIMEOUT_RECV)
     {
-        hdl->timeout_recv.tv_sec = value / 1000;
-        hdl->timeout_recv.tv_usec = value % 1000 * 1000;
+        handle->timeout_recv.tv_sec = value / 1000;
+        handle->timeout_recv.tv_usec = value % 1000 * 1000;
     }
 
     if (timeout & SSQ_TIMEOUT_SEND)
     {
-        hdl->timeout_send.tv_sec = value / 1000;
-        hdl->timeout_send.tv_usec = value % 1000 * 1000;
+        handle->timeout_send.tv_sec = value / 1000;
+        handle->timeout_send.tv_usec = value % 1000 * 1000;
     }
 }
 
 void ssq_free(const SSQHandle *const handle)
 {
-    const _SSQHandle *const hdl = handle;
-    freeaddrinfo(hdl->addr_list);
-    free((void *) hdl);
+    freeaddrinfo(handle->addr_list);
+    free((void *) handle);
 }
 
 A2SInfo *ssq_info(const SSQHandle *const handle, SSQCode *const code)
