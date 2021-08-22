@@ -210,11 +210,14 @@ static const char *ssq_query(const SSQHandle *const handle, const char payload[]
         DWORD timeout_recv = handle->timeout_recv.tv_sec * 1000 + handle->timeout_recv.tv_usec / 1000;
         DWORD timeout_send = handle->timeout_send.tv_sec * 1000 + handle->timeout_send.tv_usec / 1000;
 
-        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout_recv, sizeof (timeout_recv)) == SOCKET_ERROR ||
-            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char *) &timeout_send, sizeof (timeout_send)) == SOCKET_ERROR)
-#else
         if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &hdl->timeout_recv, sizeof (hdl->timeout_recv)) == SOCKET_ERROR ||
             setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &hdl->timeout_send, sizeof (hdl->timeout_send)) == SOCKET_ERROR)
+#else
+        unsigned long timeout_recv = handle->timeout_recv.tv_sec * 1000 + handle->timeout_recv.tv_usec / 1000;
+        unsigned long timeout_send = handle->timeout_send.tv_sec * 1000 + handle->timeout_send.tv_usec / 1000;
+
+        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout_recv, sizeof (timeout_recv)) == SOCKET_ERROR ||
+            setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char *) &timeout_send, sizeof (timeout_send)) == SOCKET_ERROR)
 #endif // _WIN32
         {
             SSQ_SET_CODE(SSQ_SOCKET_CONFIG_FAIL);
